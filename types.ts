@@ -48,6 +48,13 @@ export enum DocumentStatus {
   COMPLETED = 'Completed',
 }
 
+export interface Event {
+  id: string;
+  type: 'document.created' | 'document.sent' | 'recipient.added' | 'recipient.opened' | 'recipient.signed';
+  message: string;
+  timestamp: string;
+}
+
 export interface Document {
   id: string;
   name: string;
@@ -56,6 +63,7 @@ export interface Document {
   fields: DocumentField[];
   recipients: Recipient[];
   createdAt: string;
+  events: Event[];
   shareSettings?: {
     viewId?: string;
     editId?: string;

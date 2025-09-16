@@ -1,24 +1,54 @@
-import React from 'react';
+import React, { useContext, useState } from 'react';
+import { AppContext } from '../../context/AppContext';
 import { Card, CardHeader, CardTitle, CardContent, Accordion, AccordionItem, AccordionTrigger, AccordionContent, Input, Button } from '../../components/ui';
 
 const PersonalizationSettings: React.FC = () => {
+    const { userProfile, updateSettings } = useContext(AppContext);
+    const [settings, setSettings] = useState(userProfile.settings.personalization);
+    const [saved, setSaved] = useState(false);
+
+    const handleSave = () => {
+        updateSettings({ personalization: settings });
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+    };
+
+    const handleChange = (key: keyof typeof settings, value: any) => {
+        setSettings(prev => ({ ...prev, [key]: value }));
+    };
+
+    const handleEmailChange = (key: keyof typeof settings.signatureRequestEmail, value: string) => {
+        setSettings(prev => ({
+            ...prev,
+            signatureRequestEmail: {
+                ...prev.signatureRequestEmail,
+                [key]: value
+            }
+        }));
+    };
+
     return (
         <div className="space-y-8 max-w-4xl">
             <Card>
                 <CardHeader><CardTitle>Email Templates</CardTitle></CardHeader>
                 <CardContent>
+                    {/* Fix: Remove unsupported 'type' and 'collapsible' props from Accordion. */}
                     <Accordion defaultValue="signature-request">
                         <AccordionItem value="signature-request">
                             <AccordionTrigger>Signature Request Email</AccordionTrigger>
-                            <AccordionContent><p className="text-sm text-slate-500">Template settings will go here.</p></AccordionContent>
-                        </AccordionItem>
-                        <AccordionItem value="documents-copy">
-                            <AccordionTrigger>Documents Copy Email</AccordionTrigger>
-                            <AccordionContent><p className="text-sm text-slate-500">Template settings will go here.</p></AccordionContent>
-                        </AccordionItem>
-                        <AccordionItem value="completed-notification">
-                            <AccordionTrigger>Completed Notification Email</AccordionTrigger>
-                            <AccordionContent><p className="text-sm text-slate-500">Template settings will go here.</p></AccordionContent>
+                            <AccordionContent className="space-y-4">
+                                <Input 
+                                    label="Subject" 
+                                    value={settings.signatureRequestEmail.subject}
+                                    onChange={e => handleEmailChange('subject', e.target.value)}
+                                />
+                                <textarea
+                                    className="w-full p-2 border rounded-md min-h-[150px] text-sm"
+                                    value={settings.signatureRequestEmail.body}
+                                    onChange={e => handleEmailChange('body', e.target.value)}
+                                />
+                                <p className="text-xs text-slate-500">Variables: {"{{document_name}}"}, {"{{recipient_name}}"}, {"{{signing_link}}"} </p>
+                            </AccordionContent>
                         </AccordionItem>
                     </Accordion>
                 </CardContent>
@@ -37,25 +67,30 @@ const PersonalizationSettings: React.FC = () => {
             <Card>
                 <CardHeader><CardTitle>Submission Form</CardTitle></CardHeader>
                 <CardContent>
-                    <Accordion>
-                        <AccordionItem value="form-message">
-                            <AccordionTrigger>Completed Form Message</AccordionTrigger>
-                            <AccordionContent><Input placeholder="Your document has been signed." /></AccordionContent>
-                        </AccordionItem>
-                        <AccordionItem value="form-redirect">
-                            <AccordionTrigger>Completed Form Redirect Button</AccordionTrigger>
-                            <AccordionContent><Input placeholder="https://example.com/thank-you" /></AccordionContent>
-                        </AccordionItem>
-                         <AccordionItem value="policy-links">
-                            <AccordionTrigger>Policy Links</AccordionTrigger>
-                            <AccordionContent><p className="text-sm text-slate-500">Policy link settings will go here.</p></AccordionContent>
-                        </AccordionItem>
-                    </Accordion>
+                    <div className="space-y-4">
+                        <div>
+                            <Input 
+                                label="Completed Form Message"
+                                placeholder="Your document has been signed." 
+                                value={settings.completedFormMessage}
+                                onChange={e => handleChange('completedFormMessage', e.target.value)}
+                            />
+                        </div>
+                         <div>
+                            <Input 
+                                label="Completed Form Redirect URL"
+                                placeholder="https://example.com/thank-you" 
+                                value={settings.redirectUrl}
+                                onChange={e => handleChange('redirectUrl', e.target.value)}
+                            />
+                        </div>
+                    </div>
                 </CardContent>
             </Card>
 
-             <div className="flex justify-end">
-                <Button>Save Changes</Button>
+             <div className="flex justify-end items-center space-x-4">
+                {saved && <p className="text-sm text-emerald-600">Settings saved!</p>}
+                <Button onClick={handleSave}>Save Changes</Button>
             </div>
         </div>
     );

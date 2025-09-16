@@ -2,11 +2,11 @@ import React, { useContext, useEffect, useState, useRef, useCallback } from 'rea
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDrag, useDrop } from 'react-dnd';
 import { AppContext } from '../context/AppContext';
-import { Document, FieldType, DocumentField, Recipient, DocumentStatus } from '../types';
+import { Document, FieldType, DocumentField, Recipient, DocumentStatus, Event } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { Button, Modal, Input, Spinner, Tooltip } from '../components/ui';
+import { Button, Modal, Input, Spinner, Tooltip, Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui';
 import { usePdfGenerator } from '../hooks/usePdfGenerator';
-import { useDocumentHistory } from '../hooks/useDocumentHistory';
+// Fix: Import Sidebar component to resolve 'Cannot find name' error.
 import Sidebar from '../components/Sidebar';
 
 const ItemTypes = {
@@ -27,45 +27,42 @@ const getRecipientColor = (index: number) => RECIPIENT_COLORS[index % RECIPIENT_
 const getInitials = (name: string) => name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
 
 const FieldIcons: Record<FieldType, React.FC<{className?: string}>> = {
-  [FieldType.SIGNATURE]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}><path d="M16.53 11.23a.75.75 0 0 0-1.06-1.06L12 13.69 8.53 10.23a.75.75 0 0 0-1.06 1.06l4 4a.75.75 0 0 0 1.06 0l4-4Z"></path></svg>,
-  [FieldType.INITIALS]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}><path fillRule="evenodd" d="M12.97 3.97a.75.75 0 0 1 1.06 0l7.5 7.5a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 1 1-1.06-1.06l6.22-6.22H3a.75.75 0 0 1 0-1.5h16.19l-6.22-6.22a.75.75 0 0 1 0-1.06Z" clipRule="evenodd"></path></svg>,
-  [FieldType.DATE]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clipRule="evenodd"></path></svg>,
-  [FieldType.NAME]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}><path fillRule="evenodd" d="M1.5 6a2.25 2.25 0 0 1 2.25-2.25h16.5A2.25 2.25 0 0 1 22.5 6v12a2.25 2.25 0 0 1-2.25 2.25H3.75A2.25 2.25 0 0 1 1.5 18V6ZM3 16.06V18c0 .414.336.75.75.75h16.5A.75.75 0 0 0 21 18v-1.94l-2.69-2.689a1.5 1.5 0 0 0-2.12 0l-.88.879.97.97a.75.75 0 1 1-1.06 1.06l-5.16-5.159a1.5 1.5 0 0 0-2.12 0L3 16.061Zm10.125-7.81a1.125 1.125 0 1 1 2.25 0 1.125 1.125 0 0 1-2.25 0Z" clipRule="evenodd"></path></svg>,
-  [FieldType.TEXT]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}><path fillRule="evenodd" d="M4.125 3C3.504 3 3 3.504 3 4.125v3.75C3 8.496 3.504 9 4.125 9h15.75C20.496 9 21 8.496 21 7.875v-3.75C21 3.504 20.496 3 19.875 3H4.125ZM4.5 10.5a.75.75 0 0 0 0 1.5h15a.75.75 0 0 0 0-1.5h-15ZM4.5 15a.75.75 0 0 0 0 1.5h15a.75.75 0 0 0 0-1.5h-15Z" clipRule="evenodd"></path></svg>,
-  [FieldType.CHECKBOX]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm13.36-1.814a.75.75 0 1 0-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.14-.094l3.75-5.25Z" clipRule="evenodd"></path></svg>,
-  [FieldType.NUMBER]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}><path d="M11.25 3.375A4.125 4.125 0 0 0 7.125 7.5v9A4.125 4.125 0 0 0 11.25 20.625h1.5A4.125 4.125 0 0 0 16.875 16.5v-9A4.125 4.125 0 0 0 12.75 3.375h-1.5ZM9.123 7.5a2.123 2.123 0 0 1 2.127-2.125h1.5a2.123 2.123 0 0 1 2.127 2.125v9a2.123 2.123 0 0 1-2.127 2.125h-1.5a2.123 2.123 0 0 1-2.127-2.125v-9Z"></path></svg>,
-  [FieldType.IMAGE]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}><path fillRule="evenodd" d="M1.5 6a2.25 2.25 0 0 1 2.25-2.25h16.5A2.25 2.25 0 0 1 22.5 6v12a2.25 2.25 0 0 1-2.25 2.25H3.75A2.25 2.25 0 0 1 1.5 18V6ZM3 16.06V18c0 .414.336.75.75.75h16.5a.75.75 0 0 0 .75-.75v-1.94l-2.69-2.689a1.5 1.5 0 0 0-2.12 0l-.88.879.97.97a.75.75 0 1 1-1.06 1.06l-5.16-5.159a1.5 1.5 0 0 0-2.12 0L3 16.061Zm10.125-7.81a1.125 1.125 0 1 1 2.25 0 1.125 1.125 0 0 1-2.25 0Z" clipRule="evenodd"></path></svg>,
-  [FieldType.FILE]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}><path fillRule="evenodd" d="M11.47 2.47a.75.75 0 0 1 1.06 0l4.5 4.5a.75.75 0 0 1-1.06 1.06l-3.22-3.22V16.5a.75.75 0 0 1-1.5 0V4.81L8.03 8.03a.75.75 0 0 1-1.06-1.06l4.5-4.5ZM3 15.75a.75.75 0 0 1 .75.75v2.25a1.5 1.5 0 0 0 1.5 1.5h13.5a1.5 1.5 0 0 0 1.5-1.5V16.5a.75.75 0 0 1 1.5 0v2.25a3 3 0 0 1-3 3H5.25a3 3 0 0 1-3-3V16.5a.75.75 0 0 1 .75-.75Z" clipRule="evenodd"></path></svg>,
-  [FieldType.RADIO]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm8.25-1.5a.75.75 0 0 1 .75.75v.008c0 .414.336.75.75.75h.008a.75.75 0 0 1 0 1.5H12a.75.75 0 0 1-.75-.75V11.25a.75.75 0 0 1 .75-.75Z" clipRule="evenodd"></path></svg>,
-  [FieldType.SELECT]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}><path fillRule="evenodd" d="M11.47 4.72a.75.75 0 0 1 1.06 0l3.75 3.75a.75.75 0 0 1-1.06 1.06L12 6.31 8.78 9.53a.75.75 0 0 1-1.06-1.06l3.75-3.75Zm-3.75 9.75a.75.75 0 0 1 1.06 0L12 17.69l3.22-3.22a.75.75 0 1 1 1.06 1.06l-3.75 3.75a.75.75 0 0 1-1.06 0l-3.75-3.75a.75.75 0 0 1 0-1.06Z" clipRule="evenodd"></path></svg>,
-  [FieldType.STAMP]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}><path d="M13.5 1.515a3 3 0 0 0-3 0L3 5.845a2.25 2.25 0 0 0-1.5 2.074V18a2.25 2.25 0 0 0 2.25 2.25h16.5A2.25 2.25 0 0 0 22.5 18V7.92a2.25 2.25 0 0 0-1.5-2.074L13.5 1.515Z"></path></svg>,
+  [FieldType.SIGNATURE]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.33 10.35a1.18 1.18 0 0 0-1.2.33l-2.43 2.91 4.25 4.25 2.44-2.92a1.18 1.18 0 0 0-.32-1.2l-2.74-3.37z"/><path d="M16 12.31 4.25 21.75l-1-3.5L14 3.25l3.5 1Z"/><path d="m15 5 3 3"/><path d="M4.25 21.75 2 22l.25-2.25"/></svg>,
+  [FieldType.INITIALS]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m17 21-4.24-4.24"/><path d="M21 21H3"/><path d="M21 3H3"/><path d="M15 3h2a2 2 0 0 1 2 2v2"/><path d="M3 11V9a2 2 0 0 1 2-2h2"/></svg>,
+  [FieldType.DATE]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>,
+  [FieldType.NAME]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>,
+  [FieldType.TEXT]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>,
+  [FieldType.CHECKBOX]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>,
+  [FieldType.NUMBER]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12h16"/><path d="M4 18h16"/><path d="M4 6h16"/></svg>,
+  [FieldType.IMAGE]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>,
+  [FieldType.FILE]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>,
+  [FieldType.RADIO]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/></svg>,
+  [FieldType.SELECT]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="m6 12 4 4 8-8"/></svg>,
+  [FieldType.STAMP]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 5a2 2 0 0 0-2-2h-2.5a2 2 0 0 1-1.6-.8L12 1l-1.9 1.2a2 2 0 0 1-1.6.8H6a2 2 0 0 0-2 2v2.5a2 2 0 0 1-.8 1.6L2 12l1.2 1.9a2 2 0 0 1 .8 1.6V20a2 2 0 0 0 2 2h2.5a2 2 0 0 1 1.6.8L12 23l1.9-1.2a2 2 0 0 1 1.6-.8H20a2 2 0 0 0 2-2v-2.5a2 2 0 0 1 .8-1.6L22 12l-1.2-1.9a2 2 0 0 1-.8-1.6Z"/><path d="M12 8v4h4"/></svg>,
 };
 
 
-// FIX: Add props interface to handle shared/read-only views
 interface EditorPageProps {
   isReadOnly?: boolean;
   documentIdForView?: string;
 }
 
 const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdForView }) => {
-    // FIX: Use either the ID from props (for shared views) or from URL params
     const { documentId: documentIdFromParams } = useParams<{ documentId: string }>();
     const documentId = documentIdForView || documentIdFromParams;
 
     const navigate = useNavigate();
-    const { getDocument, updateDocument, userProfile } = useContext(AppContext);
+    const { getDocument, updateDocument, userProfile, logEvent } = useContext(AppContext);
     
-    const initialDoc = getDocument(documentId!);
-    const { doc, setDoc, undo, redo, canUndo, canRedo } = useDocumentHistory(initialDoc!);
+    const [doc, setDoc] = useState<Document | null>(() => getDocument(documentId!) || null);
 
     const [pdfPages, setPdfPages] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedRecipientId, setSelectedRecipientId] = useState<string>('');
-    const [isRecipientModalOpen, setRecipientModalOpen] = useState(false);
     const [isSendModalOpen, setSendModalOpen] = useState(false);
-    const { isGenerating, generateAndDownloadPdf } = usePdfGenerator();
-    const [alertInfo, setAlertInfo] = useState<{ title: string, message: string } | null>(null);
+    const [isLeftSidebarOpen, setLeftSidebarOpen] = useState(true);
+    const [isRightSidebarOpen, setRightSidebarOpen] = useState(true);
+
     const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
 
     useEffect(() => {
@@ -110,7 +107,7 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
       }
       
       setLoading(false);
-    }, [doc, setDoc]);
+    }, [doc]);
 
     useEffect(() => {
         if (doc?.file) {
@@ -119,17 +116,42 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
     }, [doc?.file, renderPdf]);
     
     useEffect(() => {
-        // FIX: Don't auto-save changes in read-only mode
         if(doc && !isReadOnly) {
-            const timer = setTimeout(() => updateDocument(doc), 500); // Debounce updates
+            const timer = setTimeout(() => updateDocument(doc), 500);
             return () => clearTimeout(timer);
         }
     }, [doc, updateDocument, isReadOnly]);
-
-    const handlePageThumbnailClick = (pageIndex: number) => {
-        pageRefs.current[pageIndex]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    
+    const handleSend = () => {
+        if(!doc) return;
+        if(doc.recipients.length === 0) {
+            alert("Please add at least one recipient."); return;
+        }
+        if(doc.fields.length === 0) {
+            alert("Please add at least one field to the document."); return;
+        }
+        setSendModalOpen(true);
     };
 
+    const confirmSend = () => {
+        if(!doc) return;
+        const baseUrl = `${window.location.origin}${window.location.pathname}#`;
+        const updatedRecipients = doc.recipients.map(r => ({
+            ...r,
+            signingUrl: `${baseUrl}/sign/${doc.id}/${r.id}`
+        }));
+        
+        const updatedDoc = {
+            ...doc,
+            recipients: updatedRecipients,
+            status: DocumentStatus.SENT,
+        };
+        updateDocument(updatedDoc);
+        setDoc(updatedDoc);
+        logEvent(doc.id, 'document.sent', `Document sent to ${doc.recipients.length} recipient(s).`);
+        setSendModalOpen(false);
+    }
+    
     if (loading || !doc) {
       return (
         <div className="flex h-screen bg-slate-100">
@@ -141,6 +163,31 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
       );
     }
     
+    const handleFieldDrop = (item: { type: FieldType }, page: number, dropX: number, dropY: number) => {
+        if (!selectedRecipientId || isReadOnly) return;
+        const newField: DocumentField = {
+            id: uuidv4(),
+            type: item.type,
+            page,
+            x: dropX,
+            y: dropY,
+            width: 150,
+            height: item.type === FieldType.CHECKBOX ? 20 : 40,
+            recipientId: selectedRecipientId,
+        };
+        const updatedDoc = { ...doc, fields: [...doc.fields, newField] };
+        setDoc(updatedDoc);
+    };
+
+    const handlePlacedFieldMove = (field: DocumentField, deltaX: number, deltaY: number) => {
+        if (isReadOnly) return;
+        const updatedFields = doc.fields.map(f =>
+            f.id === field.id ? { ...f, x: f.x + deltaX, y: f.y + deltaY } : f
+        );
+        const updatedDoc = { ...doc, fields: updatedFields };
+        setDoc(updatedDoc);
+    };
+
     return (
     <div className="flex h-screen bg-slate-100 text-slate-900">
       <Sidebar />
@@ -148,23 +195,32 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
         {/* Header */}
         <header className="flex-shrink-0 bg-white border-b border-slate-200 z-20">
             <div className="flex items-center justify-between p-4 h-20">
-                <h2 className="text-xl font-bold text-slate-800 truncate" title={doc.name}>{doc.name}</h2>
+                <div className="flex items-center min-w-0">
+                    <Button variant="ghost" size="icon" className="md:hidden mr-2" onClick={() => setLeftSidebarOpen(!isLeftSidebarOpen)}>
+                       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
+                    </Button>
+                    <h2 className="text-xl font-bold text-slate-800 truncate" title={doc.name}>{doc.name}</h2>
+                </div>
                  <div className="flex items-center space-x-2">
-                    <Button variant="secondary" onClick={() => navigate('/dashboard')}>Back to Documents</Button>
-                    {/* FIX: Only show Send button when in edit mode and the doc is a draft */}
-                    {(!isReadOnly && doc.status === DocumentStatus.DRAFT) && <Button>Send</Button>}
+                    <Button variant="secondary" onClick={() => navigate('/dashboard')}>Back</Button>
+                    {(!isReadOnly && doc.status === DocumentStatus.DRAFT) && <Button onClick={handleSend}>Send</Button>}
+                    <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setRightSidebarOpen(!isRightSidebarOpen)}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" x2="16" y1="6" y2="6"/><line x1="3" x2="16" y1="12" y2="12"/><line x1="3" x2="16" y1="18" y2="18"/><line x1="21" x2="21.01" y1="6" y2="6"/><line x1="21" x2="21.01" y1="12" y2="12"/><line x1="21" x2="21.01" y1="18" y2="18"/></svg>
+                    </Button>
                 </div>
             </div>
         </header>
 
         {/* Editor Body */}
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 overflow-hidden relative">
           {/* Left Thumbnails */}
-          <aside className="w-48 bg-slate-50 border-r border-slate-200 p-4 overflow-y-auto">
+          <aside className={`flex-shrink-0 bg-slate-50 border-r border-slate-200 p-4 overflow-y-auto transition-all duration-300 w-48 
+            ${isLeftSidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
+            absolute md:relative h-full md:translate-x-0 z-10`}>
               <h3 className="font-semibold text-sm mb-4">Pages</h3>
               <div className="space-y-4">
                   {pdfPages.map((pageData, index) => (
-                      <div key={index} onClick={() => handlePageThumbnailClick(index)} className="cursor-pointer border-2 border-transparent hover:border-primary-500 rounded-md overflow-hidden">
+                      <div key={index} onClick={() => pageRefs.current[index]?.scrollIntoView({ behavior: 'smooth' })} className="cursor-pointer border-2 border-transparent hover:border-primary-500 rounded-md overflow-hidden">
                           <img src={pageData} alt={`Page ${index+1} thumbnail`} className="w-full h-auto"/>
                           <p className="text-center text-xs p-1 bg-white">{index+1}</p>
                       </div>
@@ -173,41 +229,48 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
           </aside>
 
           {/* Main Content - PDF Viewer */}
-          <main className="flex-1 overflow-y-auto p-8 bg-slate-200">
+          <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-200">
             <div className="max-w-4xl mx-auto">
               {pdfPages.map((pageData, index) => (
-                  // FIX: Correctly assign ref to avoid returning a value from the callback
-                  <div key={index} ref={el => { pageRefs.current[index] = el; }} className="relative shadow-lg mb-8 bg-white">
-                      <img src={pageData} alt={`Page ${index + 1}`} className="w-full h-auto" />
-                  </div>
+                  <PdfPage 
+                      key={index}
+                      pageIndex={index}
+                      pageData={pageData}
+                      fields={doc.fields.filter(f => f.page === index)}
+                      onFieldDrop={handleFieldDrop}
+                      onPlacedFieldMove={handlePlacedFieldMove}
+                      ref={el => { pageRefs.current[index] = el; }}
+                  />
               ))}
             </div>
           </main>
           
           {/* Right Sidebar */}
-          <aside className="w-80 bg-white border-l border-slate-200 p-4 overflow-y-auto">
-            {/* FIX: Show draft sidebar only in edit mode, otherwise show submissions */}
+          <aside className={`flex-shrink-0 bg-white border-l border-slate-200 p-4 overflow-y-auto transition-all duration-300 w-80 
+            ${isRightSidebarOpen ? 'translate-x-0' : 'translate-x-full'}
+            absolute md:relative right-0 h-full md:translate-x-0 z-10`}>
             {(doc.status === DocumentStatus.DRAFT && !isReadOnly) ? (
-              <DraftSidebar doc={doc} setDoc={setDoc} selectedRecipientId={selectedRecipientId} setSelectedRecipientId={setSelectedRecipientId} />
+              <DraftSidebar doc={doc} setDoc={setDoc} selectedRecipientId={selectedRecipientId} setSelectedRecipientId={setSelectedRecipientId} logEvent={logEvent} />
             ) : (
               <SubmissionsSidebar doc={doc} />
             )}
           </aside>
         </div>
+        
+        <SendModal isOpen={isSendModalOpen} onClose={() => setSendModalOpen(false)} onConfirm={confirmSend} doc={doc} />
       </div>
     </div>
   );
 };
 
 
-// --- Sub-components for Editor Page ---
-
 const DraftSidebar: React.FC<{
   doc: Document;
   setDoc: (doc: Document) => void;
   selectedRecipientId: string;
   setSelectedRecipientId: (id: string) => void;
-}> = ({ doc, setDoc, selectedRecipientId, setSelectedRecipientId }) => {
+  logEvent: (id: string, type: any, msg: string) => void;
+}> = ({ doc, setDoc, selectedRecipientId, setSelectedRecipientId, logEvent }) => {
   const [isRecipientModalOpen, setRecipientModalOpen] = useState(false);
   const selectedRecipient = doc.recipients.find(r => r.id === selectedRecipientId);
 
@@ -242,6 +305,7 @@ const DraftSidebar: React.FC<{
         onAddRecipients={(newRecipients) => {
           const updatedDoc = { ...doc, recipients: [...doc.recipients, ...newRecipients]};
           setDoc(updatedDoc);
+          newRecipients.forEach(r => logEvent(doc.id, 'recipient.added', `Recipient "${r.name}" was added.`));
           if (!selectedRecipientId && newRecipients.length > 0) {
             setSelectedRecipientId(newRecipients[0].id);
           }
@@ -261,6 +325,129 @@ const DraftSidebar: React.FC<{
   );
 };
 
+const SubmissionsSidebar: React.FC<{ doc: Document }> = ({ doc }) => {
+  return (
+    <Tabs defaultValue="submissions">
+      <TabsList className="grid w-full grid-cols-2">
+        <TabsTrigger value="submissions">Submissions</TabsTrigger>
+        <TabsTrigger value="history">History</TabsTrigger>
+      </TabsList>
+      <TabsContent value="submissions">
+         <div className="space-y-3">
+          {doc.recipients.map((r, index) => {
+            const color = getRecipientColor(index);
+             const getStatusPill = () => {
+                switch(r.status) {
+                    case 'Signed': return <span className="text-xs font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Completed</span>;
+                    case 'Opened': return <span className="text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">Opened</span>;
+                    default: return <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full">Sent</span>;
+                }
+            };
+            return (
+              <div key={r.id} className="bg-slate-50 p-3 rounded-md border border-slate-200">
+                <div className="flex justify-between items-center mb-2">
+                  <div className="flex items-center min-w-0">
+                      <span className={`w-3 h-3 rounded-full mr-3 flex-shrink-0 ${color.dot}`}></span>
+                      <p className="font-semibold text-sm truncate text-slate-900">{r.name}</p>
+                  </div>
+                  {getStatusPill()}
+                </div>
+                <p className="text-xs text-slate-500 truncate">{r.email}</p>
+              </div>
+            )
+          })}
+        </div>
+      </TabsContent>
+      <TabsContent value="history">
+        <div className="space-y-4">
+            {[...doc.events].reverse().map(event => (
+                <div key={event.id} className="flex">
+                    <div className="w-8 flex-shrink-0 flex justify-center">
+                        <div className="w-px bg-slate-300 h-full"></div>
+                        <div className="absolute w-3 h-3 bg-slate-300 rounded-full mt-1"></div>
+                    </div>
+                    <div className="pl-4 pb-4">
+                        <p className="text-sm font-medium text-slate-800">{event.message}</p>
+                        <p className="text-xs text-slate-500">{new Date(event.timestamp).toLocaleString()}</p>
+                    </div>
+                </div>
+            ))}
+        </div>
+      </TabsContent>
+    </Tabs>
+  );
+};
+
+
+const PdfPage = React.forwardRef<HTMLDivElement, {
+    pageIndex: number, pageData: string, fields: DocumentField[],
+    onFieldDrop: (item: { type: FieldType }, page: number, x: number, y: number) => void,
+    onPlacedFieldMove: (field: DocumentField, deltaX: number, deltaY: number) => void
+}>(({ pageIndex, pageData, fields, onFieldDrop, onPlacedFieldMove }, ref) => {
+    
+    const pageContainerRef = useRef<HTMLDivElement>(null);
+    const [, drop] = useDrop(() => ({
+        accept: ItemTypes.FIELD,
+        drop: (item: { type: FieldType }, monitor) => {
+            const offset = monitor.getClientOffset();
+            const pageRect = pageContainerRef.current?.getBoundingClientRect();
+            if (offset && pageRect) {
+                const x = offset.x - pageRect.left;
+                const y = offset.y - pageRect.top;
+                onFieldDrop(item, pageIndex, x, y);
+            }
+        },
+    }), [pageIndex]);
+
+    return (
+        <div ref={ref}>
+            <div ref={pageContainerRef} className="relative shadow-lg mb-8 bg-white">
+                <div ref={drop as any} className="absolute inset-0 z-10">
+                    {fields.map((field) => (
+                        <PlacedField key={field.id} field={field} onMove={onPlacedFieldMove} />
+                    ))}
+                </div>
+                <img src={pageData} alt={`Page ${pageIndex + 1}`} className="w-full h-auto" />
+            </div>
+        </div>
+    );
+});
+
+const PlacedField: React.FC<{
+    field: DocumentField,
+    onMove: (field: DocumentField, deltaX: number, deltaY: number) => void
+}> = ({ field, onMove }) => {
+    const { getDocument } = useContext(AppContext);
+    const doc = getDocument(useParams<{documentId: string}>().documentId!)!;
+    const recipientIndex = doc.recipients.findIndex(r => r.id === field.recipientId);
+    const color = getRecipientColor(recipientIndex);
+
+    const [{ isDragging }, drag] = useDrag(() => ({
+        type: ItemTypes.PLACED_FIELD,
+        item: { id: field.id },
+        end: (item, monitor) => {
+            const delta = monitor.getDifferenceFromInitialOffset();
+            if (delta) {
+                onMove(field, delta.x, delta.y);
+            }
+        },
+        collect: monitor => ({ isDragging: !!monitor.isDragging() }),
+    }), [field, onMove]);
+    
+    return (
+        <div
+            ref={drag as any}
+            style={{ left: field.x, top: field.y, width: field.width, height: field.height }}
+            className={`absolute flex items-center justify-center cursor-move p-1 ${isDragging ? 'opacity-50' : ''} ${color.border} border-2 rounded`}
+        >
+            <div className={`w-full h-full ${color.bg} opacity-50`}></div>
+            <div className="absolute text-center">
+                <p className={`text-xs font-bold ${color.text}`}>{getInitials(doc.recipients[recipientIndex]?.name || '??')}</p>
+                <p className={`text-[8px] ${color.text}`}>{field.type}</p>
+            </div>
+        </div>
+    );
+};
 
 const AddRecipientModal: React.FC<{
   isOpen: boolean;
@@ -272,11 +459,7 @@ const AddRecipientModal: React.FC<{
     const handleAdd = () => {
         const newRecipients = recipients
             .filter(r => r.name && r.email)
-            .map(r => ({
-                ...r,
-                id: uuidv4(),
-                status: 'Pending' as const,
-            }));
+            .map(r => ({ ...r, id: uuidv4(), status: 'Pending' as const }));
         onAddRecipients(newRecipients);
         setRecipients([{ name: '', email: '', phone: '' }]);
         onClose();
@@ -288,23 +471,21 @@ const AddRecipientModal: React.FC<{
         setRecipients(updated);
     };
 
-    const addRecipientField = () => {
-        setRecipients([...recipients, { name: '', email: '', phone: '' }]);
-    };
+    const addRecipientField = () => setRecipients([...recipients, { name: '', email: '', phone: '' }]);
     
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Add New Recipients" size="xl">
             <div className="space-y-4 max-h-[60vh] overflow-y-auto p-1">
                 {recipients.map((r, index) => (
-                    <div key={index} className="grid grid-cols-1 md:grid-cols-3 gap-4 border-b pb-4">
+                    <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-4 border-b pb-4">
                         <Input label="Name" value={r.name} onChange={e => updateRecipient(index, 'name', e.target.value)} placeholder="John Doe"/>
                         <Input label="Email" value={r.email} onChange={e => updateRecipient(index, 'email', e.target.value)} type="email" placeholder="john.doe@email.com"/>
-                        <Input label="Phone (optional)" value={r.phone || ''} onChange={e => updateRecipient(index, 'phone', e.target.value)} type="tel" placeholder="Phone number"/>
                     </div>
                 ))}
             </div>
              <Button variant="link" onClick={addRecipientField} className="mt-4">Add Another</Button>
-            <div className="mt-6 flex justify-end">
+            <div className="mt-6 flex justify-end space-x-2">
+                <Button variant="secondary" onClick={onClose}>Cancel</Button>
                 <Button variant="primary" onClick={handleAdd}>Add Recipients</Button>
             </div>
         </Modal>
@@ -312,46 +493,34 @@ const AddRecipientModal: React.FC<{
 };
 
 
-const SubmissionsSidebar: React.FC<{ doc: Document }> = ({ doc }) => {
-  return (
-    <div>
-      <h3 className="font-bold text-lg mb-4">Submissions</h3>
-      <div className="space-y-3">
-        {doc.recipients.map((r, index) => {
-          const color = getRecipientColor(index);
-           const getStatusPill = () => {
-              switch(r.status) {
-                  case 'Signed': return <span className="text-xs font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Completed</span>;
-                  case 'Opened': return <span className="text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">Opened</span>;
-                  case 'Awaiting': return <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">Awaiting</span>;
-                  default: return <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full">Sent</span>;
-              }
-          };
-          return (
-            <div key={r.id} className="bg-slate-50 p-3 rounded-md border border-slate-200">
-              <div className="flex justify-between items-center mb-2">
-                <div className="flex items-center min-w-0">
-                    <span className={`w-3 h-3 rounded-full mr-3 flex-shrink-0 ${color.dot}`}></span>
-                    <p className="font-semibold text-sm truncate text-slate-900">{r.name}</p>
+const SendModal: React.FC<{ isOpen: boolean, onClose: () => void, onConfirm: () => void, doc: Document }> = ({ isOpen, onClose, onConfirm, doc }) => {
+    const { userProfile } = useContext(AppContext);
+    const { subject, body } = userProfile.settings.personalization.signatureRequestEmail;
+
+    const populatedBody = body
+        .replace(/{{document_name}}/g, doc.name)
+        .replace(/{{recipient_name}}/g, '[Recipient Name]')
+        .replace(/{{signing_link}}/g, '[Signing Link]');
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Send Document" size="xl">
+            <div className="space-y-4">
+                <p>The following email will be simulated as sent to all recipients. In a real application, each recipient would receive a unique link.</p>
+                <div className="bg-slate-50 p-4 rounded-md border border-slate-200">
+                    <p className="text-sm font-semibold">Subject: {subject.replace('{{document_name}}', doc.name)}</p>
+                    <hr className="my-2"/>
+                    <p className="text-sm whitespace-pre-wrap">{populatedBody}</p>
                 </div>
-                {getStatusPill()}
-              </div>
-              <p className="text-xs text-slate-500 truncate">{r.email}</p>
-              <div className="mt-3 flex space-x-2">
-                  <Button variant="secondary" size="sm" className="flex-1">Copy Link</Button>
-                  <Button variant="secondary" size="sm" className="flex-1">View</Button>
-              </div>
             </div>
-          )
-        })}
-      </div>
-    </div>
-  );
-};
+            <div className="mt-6 flex justify-end space-x-2">
+                <Button variant="secondary" onClick={onClose}>Cancel</Button>
+                <Button variant="primary" onClick={onConfirm}>Confirm and Send</Button>
+            </div>
+        </Modal>
+    )
+}
 
-
-interface DraggableFieldProps { type: FieldType; disabled: boolean; }
-const DraggableField: React.FC<DraggableFieldProps> = ({ type, disabled }) => {
+const DraggableField: React.FC<{ type: FieldType; disabled: boolean; }> = ({ type, disabled }) => {
     const [{ isDragging }, drag] = useDrag(() => ({
         type: ItemTypes.FIELD,
         item: { type },
@@ -360,10 +529,12 @@ const DraggableField: React.FC<DraggableFieldProps> = ({ type, disabled }) => {
     }));
     const Icon = FieldIcons[type];
     return (
-        <div ref={drag as any} className={`flex items-center p-2 border rounded-md ${disabled ? 'cursor-not-allowed bg-slate-100 text-slate-400' : 'cursor-move bg-white'} ${isDragging ? 'opacity-50 bg-primary-100' : ''}`}>
-            <Icon className="w-5 h-5 mr-2"/>
-            <span className="text-sm">{type.charAt(0) + type.slice(1).toLowerCase()}</span>
-        </div>
+        <Tooltip content={disabled ? "Select a recipient first" : `Drag to add a ${type} field`}>
+            <div ref={drag as any} className={`flex items-center p-2 border rounded-md ${disabled ? 'cursor-not-allowed bg-slate-100 text-slate-400' : 'cursor-move bg-white hover:bg-slate-50'} ${isDragging ? 'opacity-50 bg-primary-100' : ''}`}>
+                <Icon className="w-5 h-5 mr-2"/>
+                <span className="text-sm">{type.charAt(0) + type.slice(1).toLowerCase()}</span>
+            </div>
+        </Tooltip>
     );
 };
 

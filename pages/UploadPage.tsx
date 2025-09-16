@@ -24,6 +24,8 @@ const UploadPage: React.FC = () => {
           fields: [],
           recipients: [],
           createdAt: new Date().toISOString(),
+          // Fix: Add missing 'events' property required by the Document type.
+          events: [],
         };
         addDocument(newDoc);
         navigate(`/editor/${newDoc.id}`);

@@ -15,7 +15,7 @@ async function sha256(str: string): Promise<string> {
 
 const SigningPage: React.FC = () => {
   const { documentId, recipientId } = useParams<{ documentId: string; recipientId: string }>();
-  const { getDocument, updateDocument } = useContext(AppContext);
+  const { getDocument, updateDocument, logEvent } = useContext(AppContext);
   const navigate = useNavigate();
 
   const [doc, setDoc] = useState<Document | null>(null);
@@ -57,10 +57,11 @@ const SigningPage: React.FC = () => {
         );
         const updatedDoc = { ...doc, recipients: updatedRecipients };
         updateDocument(updatedDoc);
+        logEvent(doc.id, 'recipient.opened', `Recipient "${recipient.name}" opened the document.`);
         setDoc(updatedDoc);
       }
     }
-  }, [doc, recipientId, updateDocument]);
+  }, [doc, recipientId, updateDocument, logEvent]);
 
   const renderPdf = useCallback(async (fileData: string) => {
     setLoading(true);
@@ -133,9 +134,10 @@ const SigningPage: React.FC = () => {
         return f;
     });
 
+    let signingRecipientName = '';
     const updatedRecipients = await Promise.all(doc.recipients.map(async r => {
         if (r.id !== recipientId) return r;
-
+        signingRecipientName = r.name;
         const signatureField = doc.fields.find(f => f.recipientId === recipientId && (f.type === FieldType.SIGNATURE || f.type === FieldType.INITIALS));
         const signatureValue = signatureField ? fieldValues[signatureField.id] : '';
         const signatureHash = signatureValue ? await sha256(signatureValue) : undefined;
@@ -162,6 +164,7 @@ const SigningPage: React.FC = () => {
         status: isCompleted ? DocumentStatus.COMPLETED : doc.status,
     };
     updateDocument(updatedDoc);
+    logEvent(doc.id, 'recipient.signed', `Recipient "${signingRecipientName}" signed the document.`);
     setAlertInfo({
         title: "Signature Submitted",
         message: "Thank you for signing! Your document has been completed.",
@@ -180,6 +183,7 @@ const SigningPage: React.FC = () => {
         <div className="text-center py-20 bg-slate-100 min-h-screen">
             <h1 className="text-2xl font-bold text-slate-800">Document Already Signed</h1>
             <p className="text-slate-600 mt-2">You have already completed signing this document.</p>
+             <Button onClick={() => navigate('/dashboard')} className="mt-6">Back to Dashboard</Button>
         </div>
     );
   }
@@ -192,10 +196,10 @@ const SigningPage: React.FC = () => {
   return (
     <div className="bg-slate-200 min-h-screen">
       <div className="sticky top-0 bg-white shadow-md z-10 p-4 flex justify-between items-center">
-        <h1 className="text-xl font-bold text-slate-800">{doc.name}</h1>
+        <h1 className="text-lg md:text-xl font-bold text-slate-800 truncate pr-4">{doc.name}</h1>
         <Button onClick={handleSubmit}>Finish Signing</Button>
       </div>
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="max-w-4xl mx-auto">
           {pdfPages.map((pageData, index) => (
             <div key={index} className="relative shadow-lg mb-8 bg-white">

@@ -208,6 +208,8 @@ const AccordionContext = React.createContext<{
   setOpenItem: React.Dispatch<React.SetStateAction<string | null>>;
 }>({ openItem: null, setOpenItem: () => {} });
 
+const AccordionItemContext = React.createContext<{ value: string }>({ value: '' });
+
 export const Accordion: React.FC<{ children: React.ReactNode, defaultValue?: string }> = ({ children, defaultValue }) => {
   const [openItem, setOpenItem] = useState<string | null>(defaultValue || null);
   return (
@@ -218,7 +220,11 @@ export const Accordion: React.FC<{ children: React.ReactNode, defaultValue?: str
 };
 
 export const AccordionItem: React.FC<{ children: React.ReactNode; value: string }> = ({ children, value }) => {
-  return <div className="border-b">{children}</div>;
+  return (
+    <AccordionItemContext.Provider value={{ value }}>
+      <div className="border-b">{children}</div>
+    </AccordionItemContext.Provider>
+  );
 };
 
 export const AccordionTrigger: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -245,21 +251,8 @@ export const AccordionTrigger: React.FC<{ children: React.ReactNode }> = ({ chil
   );
 };
 
-export const AccordionContent: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AccordionContent: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className }) => {
   const { openItem } = useContext(AccordionContext);
   const { value } = useContext(AccordionItemContext);
-  return openItem === value ? <div className="pb-4">{children}</div> : null;
+  return openItem === value ? <div className={`pb-4 ${className || ''}`}>{children}</div> : null;
 };
-
-// Internal context for AccordionItem to pass value
-const AccordionItemContext = React.createContext<{ value: string }>({ value: '' });
-
-// We need to wrap AccordionItem's children to provide the item's value to Trigger and Content
-const OriginalAccordionItem = AccordionItem;
-(AccordionItem as any) = ({ children, value }: { children: React.ReactNode, value: string }) => {
-  return (
-    <AccordionItemContext.Provider value={{ value }}>
-      <OriginalAccordionItem value={value}>{children}</OriginalAccordionItem>
-    </AccordionItemContext.Provider>
-  )
-}

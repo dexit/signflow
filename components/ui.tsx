@@ -1,4 +1,4 @@
-import React, { ReactNode, createContext, useContext } from 'react';
+import React, { ReactNode, createContext, useContext, useState, useRef, useEffect } from 'react';
 
 // --- Button ---
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -109,7 +109,7 @@ export const Tabs: React.FC<{ defaultValue: string; children: ReactNode; onValue
   };
   return <TabsContext.Provider value={{ value, onValueChange: handleValueChange }}><div>{children}</div></TabsContext.Provider>;
 };
-export const TabsList: React.FC<{ children: ReactNode; }> = ({ children }) => <div className="inline-flex h-10 items-center justify-center rounded-md bg-slate-100 p-1 text-slate-500">{children}</div>;
+export const TabsList: React.FC<{ children: ReactNode; className?: string}> = ({ children, className }) => <div className={`inline-flex h-10 items-center justify-center rounded-md bg-slate-100 p-1 text-slate-500 ${className}`}>{children}</div>;
 export const TabsTrigger: React.FC<{ value: string; children: ReactNode; }> = ({ value, children }) => {
   const { value: activeValue, onValueChange } = useContext(TabsContext);
   const isActive = activeValue === value;
@@ -123,3 +123,76 @@ export const TabsContent: React.FC<{ value: string; children: ReactNode; }> = ({
   const { value: activeValue } = useContext(TabsContext);
   return activeValue === value ? <div className="mt-4 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">{children}</div> : null;
 };
+
+// --- Dropdown Menu ---
+const DropdownContext = React.createContext<{
+  isOpen: boolean;
+  setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
+}>({ isOpen: false, setIsOpen: () => {} });
+
+export const DropdownMenu: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  return (
+    <DropdownContext.Provider value={{ isOpen, setIsOpen }}>
+      <div className="relative inline-block text-left" ref={menuRef}>
+        {children}
+      </div>
+    </DropdownContext.Provider>
+  );
+};
+
+export const DropdownMenuTrigger: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { setIsOpen } = useContext(DropdownContext);
+  return <div onClick={() => setIsOpen(o => !o)}>{children}</div>;
+};
+
+export const DropdownMenuContent: React.FC<{ children: React.ReactNode, className?: string }> = ({ children, className }) => {
+  const { isOpen } = useContext(DropdownContext);
+  if (!isOpen) return null;
+  return (
+    <div className={`origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10 ${className}`} role="menu">
+      <div className="py-1" role="none">
+        {children}
+      </div>
+    </div>
+  );
+};
+
+// Fix: Update DropdownMenuItem to accept a `disabled` prop and handle async `onSelect` functions.
+export const DropdownMenuItem: React.FC<{ children: React.ReactNode; onSelect: () => unknown; disabled?: boolean; }> = ({ children, onSelect, disabled }) => {
+    const { setIsOpen } = useContext(DropdownContext);
+    return (
+        <button onClick={() => { onSelect(); setIsOpen(false); }} className="text-gray-700 block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 disabled:opacity-50" role="menuitem" disabled={disabled}>
+           {children}
+        </button>
+    )
+}
+
+// --- Tooltip ---
+export const Tooltip: React.FC<{ children: React.ReactNode; content: string }> = ({ children, content }) => {
+    return (
+        <div className="relative flex flex-col items-center group">
+            {children}
+            <div className="absolute bottom-0 flex-col items-center hidden mb-10 group-hover:flex">
+                <span className="relative z-10 p-2 text-xs leading-none text-white whitespace-nowrap bg-black shadow-lg rounded-md">
+                    {content}
+                </span>
+                <div className="w-3 h-3 -mt-2 rotate-45 bg-black"></div>
+            </div>
+        </div>
+    )
+}

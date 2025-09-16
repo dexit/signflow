@@ -1,24 +1,49 @@
-
 import React, { useContext, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppContext } from '../context/AppContext';
-import { Button } from '../components/ui';
+import { Button, Spinner, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, Modal } from '../components/ui';
 import { Document, DocumentStatus } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import ShareModal from '../components/ShareModal';
+import { usePdfGenerator } from '../hooks/usePdfGenerator';
 
 const DashboardPage: React.FC = () => {
-  const { documents, addDocument } = useContext(AppContext);
+  const { documents, addDocument, updateDocument } = useContext(AppContext);
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
   const [isShareModalOpen, setShareModalOpen] = useState(false);
+  const { isGenerating, generateAndDownloadPdf } = usePdfGenerator();
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
 
-  const openShareModal = (doc: Document, e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent navigation
+
+  const openShareModal = (doc: Document) => {
     setSelectedDoc(doc);
     setShareModalOpen(true);
   };
+  
+  const handleDownload = async (doc: Document) => {
+    setGeneratingId(doc.id);
+    await generateAndDownloadPdf(doc);
+    setGeneratingId(null);
+  };
+
+  const handleDuplicate = (docToDuplicate: Document) => {
+    const newDoc: Document = {
+      ...JSON.parse(JSON.stringify(docToDuplicate)), // Deep copy
+      id: uuidv4(),
+      name: `${docToDuplicate.name} (Copy)`,
+      status: DocumentStatus.DRAFT,
+      createdAt: new Date().toISOString(),
+      recipients: docToDuplicate.recipients.map(r => ({...r, status: 'Pending', signingUrl: undefined, signedAt: undefined })),
+      fields: docToDuplicate.fields.map(f => ({...f, value: undefined, metadata: undefined})),
+      shareSettings: {},
+    };
+    addDocument(newDoc);
+    navigate(`/editor/${newDoc.id}`);
+  };
+
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -40,7 +65,7 @@ const DashboardPage: React.FC = () => {
       };
       reader.readAsDataURL(file);
     } else {
-      alert('Please upload a valid PDF file.');
+      setAlertMessage('Please upload a valid PDF file.');
     }
     // Reset file input to allow uploading the same file again
     if(fileInputRef.current) {
@@ -76,7 +101,7 @@ const DashboardPage: React.FC = () => {
         </div>
       </div>
       
-      <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+      <div className="bg-white shadow sm:rounded-lg">
         {documents.length > 0 ? (
           <ul role="list" className="divide-y divide-gray-200">
             {documents.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((doc) => (
@@ -85,13 +110,28 @@ const DashboardPage: React.FC = () => {
                   <div className="px-4 py-4 sm:px-6">
                     <div className="flex items-center justify-between">
                       <p className="text-md font-medium text-primary-600 truncate">{doc.name}</p>
-                      <div className="ml-2 flex-shrink-0 flex items-center">
+                      <div className="ml-2 flex-shrink-0 flex items-center space-x-2">
                         <p className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColor(doc.status)}`}>
                           {doc.status}
                         </p>
-                        <button onClick={(e) => openShareModal(doc, e)} className="ml-2 p-1 text-gray-400 hover:text-gray-600 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500" aria-label="Share document">
-                           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-                        </button>
+                         <div onClick={e => e.stopPropagation()}>
+                           <DropdownMenu>
+                              <DropdownMenuTrigger>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent>
+                                <DropdownMenuItem onSelect={() => openShareModal(doc)}>Share</DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => handleDuplicate(doc)}>Duplicate</DropdownMenuItem>
+                                {[DocumentStatus.SENT, DocumentStatus.COMPLETED].includes(doc.status) && (
+                                  <DropdownMenuItem onSelect={() => handleDownload(doc)} disabled={isGenerating && generatingId === doc.id}>
+                                      {isGenerating && generatingId === doc.id ? <div className="flex items-center"><Spinner size="sm" /> <span className="ml-2">Downloading...</span></div> : 'Download'}
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                         </div>
                       </div>
                     </div>
                     <div className="mt-2 sm:flex sm:justify-between">
@@ -130,6 +170,12 @@ const DashboardPage: React.FC = () => {
             doc={selectedDoc}
         />
       )}
+      <Modal isOpen={!!alertMessage} onClose={() => setAlertMessage(null)} title="Upload Error">
+        <p>{alertMessage}</p>
+        <div className="mt-6 flex justify-end">
+            <Button onClick={() => setAlertMessage(null)}>Close</Button>
+        </div>
+      </Modal>
     </div>
   );
 };

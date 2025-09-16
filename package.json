@@ -15,7 +15,8 @@
     "react-router-dom": "^7.9.1",
     "react-dnd": "^16.0.1",
     "pdfjs-dist": "^4.3.136",
-    "react-dnd-html5-backend": "^16.0.1"
+    "react-dnd-html5-backend": "^16.0.1",
+    "pdf-lib": "^1.17.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

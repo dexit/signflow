@@ -17,14 +17,22 @@ export interface DocumentField {
   height: number;
   recipientId: string;
   value?: string; // For text, name, date, signature data URL, or 'true' for checkbox
+  metadata?: {
+    signedAt?: string;
+  }
 }
 
 export interface Recipient {
-  id: string;
+  id:string;
   name: string;
   email: string;
-  status: 'Pending' | 'Signed';
+  status: 'Pending' | 'Opened' | 'Signed';
   signingUrl?: string;
+  openedAt?: string;
+  signedAt?: string;
+  ipAddress?: string;
+  signatureHash?: string;
+  auditHash?: string;
 }
 
 export enum DocumentStatus {
@@ -45,4 +53,8 @@ export interface Document {
     viewId?: string;
     editId?: string;
   };
+  pageDimensions?: {
+    width: number;
+    height: number;
+  }[];
 }

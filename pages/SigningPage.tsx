@@ -6,6 +6,15 @@ import { Document, DocumentField, FieldType, DocumentStatus } from '../types';
 import { Button, Modal, Spinner } from '../components/ui';
 import SignaturePad from '../components/SignaturePad';
 
+// Helper function to compute SHA-256 hash
+async function sha256(str: string): Promise<string> {
+    const buffer = new TextEncoder().encode(str);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashHex;
+}
+
 const SigningPage: React.FC = () => {
   const { documentId, recipientId } = useParams<{ documentId: string; recipientId: string }>();
   const { getDocument, updateDocument } = useContext(AppContext);
@@ -17,6 +26,7 @@ const SigningPage: React.FC = () => {
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [isSignatureModalOpen, setSignatureModalOpen] = useState(false);
   const [activeSignatureField, setActiveSignatureField] = useState<DocumentField | null>(null);
+  const [alertInfo, setAlertInfo] = useState<{ title: string; message: string; onConfirm?: () => void } | null>(null);
 
   useEffect(() => {
     if (!documentId) return;
@@ -41,6 +51,22 @@ const SigningPage: React.FC = () => {
       // Handle document not found
     }
   }, [documentId, recipientId, getDocument]);
+
+  useEffect(() => {
+    // Track when a recipient opens the document
+    if (doc) {
+      const recipient = doc.recipients.find(r => r.id === recipientId);
+      if (recipient && recipient.status === 'Pending') {
+        const openedAt = new Date().toISOString();
+        const updatedRecipients = doc.recipients.map(r => 
+          r.id === recipientId ? { ...r, status: 'Opened' as const, openedAt } : r
+        );
+        const updatedDoc = { ...doc, recipients: updatedRecipients };
+        updateDocument(updatedDoc);
+        setDoc(updatedDoc); // Update local state as well
+      }
+    }
+  }, [doc, recipientId, updateDocument]);
 
   const renderPdf = useCallback(async (fileData: string) => {
     setLoading(true);
@@ -88,23 +114,50 @@ const SigningPage: React.FC = () => {
     setActiveSignatureField(null);
   };
 
-  const handleSubmit = () => {
-    if (!doc) return;
+  const handleSubmit = async () => {
+    if (!doc || !recipientId) return;
     const recipientFields = doc.fields.filter(f => f.recipientId === recipientId);
     const allFieldsFilled = recipientFields.every(f => !!fieldValues[f.id]);
 
     if (!allFieldsFilled) {
-        alert("Please fill all your required fields.");
+        setAlertInfo({ title: "Fields Incomplete", message: "Please fill all your required fields before you can finish signing." });
         return;
     }
 
-    const updatedFields = doc.fields.map(f => 
-        fieldValues[f.id] ? { ...f, value: fieldValues[f.id] } : f
-    );
-    const updatedRecipients = doc.recipients.map(r =>
-        // Fix: Use 'as const' to prevent TypeScript from widening the status type to 'string'.
-        r.id === recipientId ? { ...r, status: 'Signed' as const } : r
-    );
+    const signedAt = new Date().toISOString();
+    const ipAddress = "IP Not Tracked (Client-Side App)";
+
+    const updatedFields = doc.fields.map(f => {
+        if (fieldValues[f.id]) {
+            const isSignature = f.type === FieldType.SIGNATURE || f.type === FieldType.INITIALS;
+            return {
+                ...f,
+                value: fieldValues[f.id],
+                metadata: isSignature ? { signedAt } : f.metadata,
+            };
+        }
+        return f;
+    });
+
+    const updatedRecipients = await Promise.all(doc.recipients.map(async r => {
+        if (r.id !== recipientId) return r;
+
+        const signatureField = doc.fields.find(f => f.recipientId === recipientId && (f.type === FieldType.SIGNATURE || f.type === FieldType.INITIALS));
+        const signatureValue = signatureField ? fieldValues[signatureField.id] : '';
+        const signatureHash = signatureValue ? await sha256(signatureValue) : undefined;
+        
+        const auditTrailData = JSON.stringify({
+            name: r.name,
+            email: r.email,
+            signedAt,
+            ipAddress,
+            signatureHash,
+            documentId: doc.id,
+        });
+        const auditHash = await sha256(auditTrailData);
+
+        return { ...r, status: 'Signed' as const, signedAt, ipAddress, signatureHash, auditHash };
+    }));
 
     const isCompleted = updatedRecipients.every(r => r.status === 'Signed');
 
@@ -112,12 +165,14 @@ const SigningPage: React.FC = () => {
         ...doc,
         fields: updatedFields,
         recipients: updatedRecipients,
-        // Fix: Use DocumentStatus enum for type correctness instead of a string literal.
         status: isCompleted ? DocumentStatus.COMPLETED : doc.status,
     };
     updateDocument(updatedDoc);
-    alert("Thank you for signing!");
-    navigate('/');
+    setAlertInfo({
+        title: "Signature Submitted",
+        message: "Thank you for signing! Your document has been completed.",
+        onConfirm: () => navigate('/dashboard')
+    });
   };
 
   if (loading || !doc) {
@@ -134,6 +189,11 @@ const SigningPage: React.FC = () => {
         </div>
     );
   }
+
+  const handleAlertConfirm = () => {
+    alertInfo?.onConfirm?.();
+    setAlertInfo(null);
+  };
 
   return (
     <div className="bg-gray-100 min-h-screen">
@@ -163,6 +223,15 @@ const SigningPage: React.FC = () => {
                         <button onClick={() => openSignatureModal(field)} className="w-full h-full flex items-center justify-center">
                             {value ? <img src={value} alt="signature" className="w-full h-full object-contain"/> : <span className="text-yellow-700 text-sm">Click to sign</span>}
                         </button>
+                    ) : field.type === FieldType.CHECKBOX ? (
+                         <div className="w-full h-full flex items-center justify-center">
+                            <input
+                                type="checkbox"
+                                checked={!!value}
+                                onChange={(e) => handleFieldValueChange(field.id, e.target.checked ? 'true' : '')}
+                                className="w-2/3 h-2/3"
+                            />
+                        </div>
                     ) : (
                         <input
                             type="text"
@@ -184,6 +253,12 @@ const SigningPage: React.FC = () => {
             onSave={handleSaveSignature}
             onClose={() => setSignatureModalOpen(false)}
         />
+      </Modal>
+      <Modal isOpen={!!alertInfo} onClose={handleAlertConfirm} title={alertInfo?.title || ''}>
+        <p>{alertInfo?.message}</p>
+        <div className="mt-6 flex justify-end">
+            <Button onClick={handleAlertConfirm}>OK</Button>
+        </div>
       </Modal>
     </div>
   );

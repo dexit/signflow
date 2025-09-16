@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Document, FieldType, DocumentStatus } from '../types';
-import { PDFDocument, rgb, StandardFonts, PDFFont, PageSizes, drawText, pdfDocEncoding } from 'pdf-lib';
+// FIX: Removed unused 'pdfDocEncoding' and 'drawText' from import.
+import { PDFDocument, rgb, StandardFonts, PDFFont, PageSizes } from 'pdf-lib';
 
 async function sha256(str: string): Promise<string> {
     if(!str) return Promise.resolve('');
     const buffer = new TextEncoder().encode(str);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashBuffer = await crypto.subtle.digest('SHA-266', buffer);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     return hashHex;
@@ -21,7 +22,8 @@ async function embedFont(pdfDoc: PDFDocument): Promise<PDFFont> {
 }
 
 const addCertificatePage = async (pdfDoc: PDFDocument, doc: Document, font: PDFFont, courierFont: PDFFont, documentHash: string) => {
-    const page = pdfDoc.addPage(PageSizes.A4);
+    // FIX: Changed 'const' to 'let' to allow page to be reassigned for multi-page certificates.
+    let page = pdfDoc.addPage(PageSizes.A4);
     const { width, height } = page.getSize();
     const margin = 50;
     

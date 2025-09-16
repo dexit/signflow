@@ -93,8 +93,9 @@ export const Spinner: React.FC<{ size?: 'sm' | 'md' | 'lg' }> = ({ size = 'md' }
 
 
 // --- Card ---
-export const Card: React.FC<{ children: ReactNode; className?: string }> = ({ children, className }) => (
-  <div className={`rounded-xl border border-slate-200 bg-card text-card-foreground shadow-sm ${className}`}>
+// FIX: Updated Card component to accept additional HTML attributes like onClick.
+export const Card: React.FC<{ children: ReactNode; className?: string } & React.HTMLAttributes<HTMLDivElement>> = ({ children, className, ...props }) => (
+  <div className={`rounded-xl border border-slate-200 bg-card text-card-foreground shadow-sm ${className}`} {...props}>
     {children}
   </div>
 );

@@ -276,7 +276,6 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
         </div>
         
         <SendModal isOpen={isSendModalOpen} onClose={() => setSendModalOpen(false)} onConfirm={confirmSend} doc={doc} />
-      </div>
     </div>
   );
 };

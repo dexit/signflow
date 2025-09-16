@@ -132,8 +132,9 @@ const DashboardPage: React.FC = () => {
             {documents.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((doc) => {
               const s = statusInfo(doc.status);
               return (
-              <Card key={doc.id} className="hover:shadow-lg transition-shadow cursor-pointer">
-                <CardContent className="p-5" onClick={() => navigate(`/editor/${doc.id}`)}>
+              // FIX: Moved onClick to Card component to make the entire card clickable and resolve prop error on CardContent.
+              <Card key={doc.id} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate(`/editor/${doc.id}`)}>
+                <CardContent className="p-5">
                   <div className="flex justify-between items-start">
                     <span className={`px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${s.color}`}>
                       {s.text}

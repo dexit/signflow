@@ -152,6 +152,29 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
         setSendModalOpen(false);
     }
     
+    const handleSignYourself = () => {
+        if (!doc) return;
+
+        const adminEmail = 'admin@docuseal.com';
+        let selfRecipient = doc.recipients.find(r => r.email === adminEmail);
+        let updatedDoc = doc;
+
+        if (!selfRecipient) {
+            const newRecipient: Recipient = {
+                id: uuidv4(),
+                name: "Admin User",
+                email: adminEmail,
+                status: 'Pending',
+            };
+            updatedDoc = { ...doc, recipients: [...doc.recipients, newRecipient] };
+            setDoc(updatedDoc);
+            logEvent(doc.id, 'recipient.added', `Recipient "Admin User" was added for self-signing.`);
+            selfRecipient = newRecipient;
+        }
+        
+        navigate(`/sign/${doc.id}/${selfRecipient.id}`);
+    };
+    
     if (loading || !doc) {
       return (
         <div className="flex h-screen bg-slate-100">
@@ -203,7 +226,12 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
                 </div>
                  <div className="flex items-center space-x-2">
                     <Button variant="secondary" onClick={() => navigate('/dashboard')}>Back</Button>
-                    {(!isReadOnly && doc.status === DocumentStatus.DRAFT) && <Button onClick={handleSend}>Send</Button>}
+                     {(!isReadOnly && doc.status === DocumentStatus.DRAFT) && (
+                        <>
+                            <Button variant="secondary" onClick={handleSignYourself}>Sign Yourself</Button>
+                            <Button onClick={handleSend}>Send</Button>
+                        </>
+                     )}
                     <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setRightSidebarOpen(!isRightSidebarOpen)}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" x2="16" y1="6" y2="6"/><line x1="3" x2="16" y1="12" y2="12"/><line x1="3" x2="16" y1="18" y2="18"/><line x1="21" x2="21.01" y1="6" y2="6"/><line x1="21" x2="21.01" y1="12" y2="12"/><line x1="21" x2="21.01" y1="18" y2="18"/></svg>
                     </Button>

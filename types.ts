@@ -74,6 +74,52 @@ export interface Document {
   }[];
 }
 
+// --- START: Updated UserSettings ---
+
+export type SmtpConfig = {
+  provider: 'smtp';
+  smtpHost: string;
+  smtpPort: string;
+  smtpUsername: string;
+  smtpPassword: string;
+  smtpDomain: string;
+  smtpAuth: string;
+  smtpSecurity: string;
+  sendFromEmail: string;
+};
+
+export type MsGraphConfig = {
+  provider: 'msGraph';
+  clientId: string;
+  tenantId: string;
+  clientSecret: string;
+};
+
+export type EmailWebhookConfig = {
+  provider: 'webhook';
+  url: string;
+};
+
+export type EmailConfig = SmtpConfig | MsGraphConfig | EmailWebhookConfig;
+
+export type TwilioConfig = {
+  provider: 'twilio';
+  accountSid: string;
+  authToken: string;
+  twilioPhoneNumber: string;
+};
+
+export type SmsWebhookConfig = {
+  provider: 'webhook';
+  url: string;
+};
+
+export type SmsConfig = TwilioConfig | SmsWebhookConfig;
+
+export type StorageConfig = 
+  | { provider: 'disk' | 'aws' | 'gcp' | 'azure' }
+  | { provider: 'postgresql'; connectionUrl: string; };
+
 export interface UserSettings {
   personalization: {
     signatureRequestEmail: { subject: string; body: string; };
@@ -84,20 +130,12 @@ export interface UserSettings {
     redirectUrl: string;
     showConfetti: boolean;
   };
-  email: {
-    smtpHost: string;
-    smtpPort: string;
-    smtpUsername: string;
-    smtpPassword: string;
-    smtpDomain: string;
-    smtpAuth: string;
-    smtpSecurity: string;
-    sendFromEmail: string;
-  };
-  storage: {
-    provider: 'disk' | 'aws' | 'gcp' | 'azure';
-  };
+  email: EmailConfig;
+  sms: SmsConfig;
+  storage: StorageConfig;
 }
+
+// --- END: Updated UserSettings ---
 
 export interface UserProfile {
   signature?: string;

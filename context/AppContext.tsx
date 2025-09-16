@@ -31,8 +31,15 @@ const defaultSettings: UserSettings = {
         showConfetti: false,
     },
     email: {
+        provider: 'smtp',
         smtpHost: '', smtpPort: '', smtpUsername: '', smtpPassword: '',
         smtpDomain: '', smtpAuth: 'plain', smtpSecurity: 'tls', sendFromEmail: ''
+    },
+    sms: {
+        provider: 'twilio',
+        accountSid: '',
+        authToken: '',
+        twilioPhoneNumber: ''
     },
     storage: { provider: 'disk' },
 };
@@ -52,16 +59,43 @@ export const AppContext = createContext<AppContextType>({
   updateSettings: () => {},
 });
 
+// Helper function to check if a value is a non-array object.
+const isObject = (item: any): item is Record<string, any> => {
+  return item && typeof item === 'object' && !Array.isArray(item);
+};
+
+// Deeply merges a source object into a target object.
+const deepMerge = <T extends Record<string, any>>(target: T, source: Partial<T>): T => {
+  const output = { ...target };
+  if (isObject(target) && isObject(source)) {
+    Object.keys(source).forEach(key => {
+      const sourceKey = key as keyof T;
+      if (isObject(source[sourceKey])) {
+        if (!(key in target) || !isObject(target[sourceKey])) {
+          output[sourceKey] = source[sourceKey];
+        } else {
+          output[sourceKey] = deepMerge(target[sourceKey], source[sourceKey] as Partial<T[keyof T]>);
+        }
+      } else {
+        output[sourceKey] = source[sourceKey];
+      }
+    });
+  }
+  return output;
+};
+
+
 const getInitialState = <T,>(key: string, defaultValue: T): T => {
   try {
     const storedValue = localStorage.getItem(key);
     if (storedValue) {
-      // Deep merge with defaults to handle new settings properties
       const parsed = JSON.parse(storedValue);
-      if (typeof parsed === 'object' && parsed !== null && typeof defaultValue === 'object' && defaultValue !== null) {
-        return { ...defaultValue, ...parsed };
+      // Use deep merge only for objects to avoid corrupting arrays (like documents)
+      // and to correctly merge nested settings in userProfile.
+      if (isObject(defaultValue) && isObject(parsed)) {
+        return deepMerge(defaultValue as any, parsed as any);
       }
-      return parsed;
+      return parsed; // Return arrays and primitives as is.
     }
   } catch (error) {
     console.error(`Error reading from localStorage key “${key}”:`, error);
@@ -141,14 +175,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateSettings = useCallback((settingsUpdate: Partial<UserSettings>) => {
     setUserProfile(prev => ({
-        ...prev,
-        settings: {
-           ...prev.settings,
-            ...settingsUpdate,
-            personalization: { ...prev.settings.personalization, ...settingsUpdate.personalization },
-            email: { ...prev.settings.email, ...settingsUpdate.email },
-            storage: { ...prev.settings.storage, ...settingsUpdate.storage },
-        }
+      ...prev,
+      settings: deepMerge(prev.settings, settingsUpdate),
     }));
   }, []);
 

@@ -5,16 +5,17 @@ import EsignatureSettings from './settings/EsignatureSettings';
 import PersonalizationSettings from './settings/PersonalizationSettings';
 import EmailSettings from './settings/EmailSettings';
 import StorageSettings from './settings/StorageSettings';
+import SmsSettings from './settings/SmsSettings';
 
 const settingsNav = [
     { name: 'E-Signature', path: 'e-signature', component: <EsignatureSettings /> },
     { name: 'Personalization', path: 'personalization', component: <PersonalizationSettings /> },
     { name: 'Email', path: 'email', component: <EmailSettings /> },
+    { name: 'SMS', path: 'sms', component: <SmsSettings /> },
     { name: 'Storage', path: 'storage', component: <StorageSettings /> },
     // Add placeholders for other settings pages
     { name: 'Profile', path: 'profile' },
     { name: 'Account', path: 'account' },
-    { name: 'SMS', path: 'sms' },
     { name: 'Notifications', path: 'notifications' },
     { name: 'Users', path: 'users' },
     { name: 'API', path: 'api' },

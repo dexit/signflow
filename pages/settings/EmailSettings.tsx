@@ -43,7 +43,6 @@ const EmailSettings: React.FC = () => {
                     <TabsTrigger value="webhook">Webhook</TabsTrigger>
                 </TabsList>
 
-                {/* Fix: Removed className from TabsContent and wrapped content in a div with the class. */}
                 <TabsContent value="smtp">
                     {settings.provider === 'smtp' && (
                         <div className="space-y-4">
@@ -78,7 +77,6 @@ const EmailSettings: React.FC = () => {
                         </div>
                     )}
                 </TabsContent>
-                {/* Fix: Removed className from TabsContent and wrapped content in a div with the class. */}
                 <TabsContent value="msGraph">
                      {settings.provider === 'msGraph' && (
                         <div className="space-y-4">
@@ -88,7 +86,6 @@ const EmailSettings: React.FC = () => {
                         </div>
                     )}
                 </TabsContent>
-                 {/* Fix: Removed className from TabsContent and wrapped content in a div with the class. */}
                  <TabsContent value="webhook">
                      {settings.provider === 'webhook' && (
                         <div className="space-y-4">

@@ -39,7 +39,6 @@ const SmsSettings: React.FC = () => {
                     <TabsTrigger value="webhook">Webhook</TabsTrigger>
                 </TabsList>
 
-                {/* Fix: Removed className from TabsContent and wrapped content in a div with the class. */}
                 <TabsContent value="twilio">
                     {settings.provider === 'twilio' && (
                         <div className="space-y-4">
@@ -50,7 +49,6 @@ const SmsSettings: React.FC = () => {
                     )}
                 </TabsContent>
                 
-                 {/* Fix: Removed className from TabsContent and wrapped content in a div with the class. */}
                  <TabsContent value="webhook">
                      {settings.provider === 'webhook' && (
                         <div className="space-y-4">

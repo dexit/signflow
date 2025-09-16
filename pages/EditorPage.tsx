@@ -4,8 +4,9 @@ import { useDrag, useDrop } from 'react-dnd';
 import { AppContext } from '../context/AppContext';
 import { Document, FieldType, DocumentField, Recipient, DocumentStatus, Event } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { Button, Modal, Input, Spinner, Tooltip, Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui';
+import { Button, Modal, Input, Spinner, Tooltip, Tabs, TabsList, TabsTrigger, TabsContent, Card, CardContent } from '../components/ui';
 import { useFieldDetector } from '../hooks/useFieldDetector';
+import { useDocumentHistory } from '../hooks/useDocumentHistory';
 
 const ItemTypes = {
   FIELD: 'field',
@@ -39,7 +40,6 @@ const FieldIcons: Record<FieldType, React.FC<{className?: string}>> = {
   [FieldType.STAMP]: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 5a2 2 0 0 0-2-2h-2.5a2 2 0 0 1-1.6-.8L12 1l-1.9 1.2a2 2 0 0 1-1.6.8H6a2 2 0 0 0-2 2v2.5a2 2 0 0 1-.8 1.6L2 12l1.2 1.9a2 2 0 0 1 .8 1.6V20a2 2 0 0 0 2 2h2.5a2 2 0 0 1 1.6.8L12 23l1.9-1.2a2 2 0 0 1 1.6-.8H20a2 2 0 0 0 2-2v-2.5a2 2 0 0 1 .8-1.6L22 12l-1.2-1.9a2 2 0 0 1-.8-1.6Z"/><path d="M12 8v4h4"/></svg>,
 };
 
-
 interface EditorPageProps {
   isReadOnly?: boolean;
   documentIdForView?: string;
@@ -52,15 +52,15 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
     const navigate = useNavigate();
     const { getDocument, updateDocument, userProfile, logEvent } = useContext(AppContext);
     
-    const [doc, setDoc] = useState<Document | null>(() => getDocument(documentId!) || null);
-
+    const initialDoc = getDocument(documentId!);
+    const { doc, setDoc, undo, redo, canUndo, canRedo } = useDocumentHistory(initialDoc!);
+    
     const [pdfPages, setPdfPages] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedRecipientId, setSelectedRecipientId] = useState<string>('');
+    const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
     const [isSendModalOpen, setSendModalOpen] = useState(false);
-    const [isLeftSidebarOpen, setLeftSidebarOpen] = useState(true);
-    const [isRightSidebarOpen, setRightSidebarOpen] = useState(true);
-
+    
     const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
 
     useEffect(() => {
@@ -74,6 +74,22 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
             setSelectedRecipientId('');
         }
     }, [doc, navigate, selectedRecipientId]);
+    
+    // Deselect field if the recipient changes or field is removed
+    useEffect(() => {
+        if (selectedFieldId) {
+            const fieldExists = doc.fields.some(f => f.id === selectedFieldId);
+            if (!fieldExists) {
+                setSelectedFieldId(null);
+            } else {
+                const fieldRecipientId = doc.fields.find(f => f.id === selectedFieldId)?.recipientId;
+                if(fieldRecipientId !== selectedRecipientId) {
+                   setSelectedFieldId(null);
+                }
+            }
+        }
+    }, [selectedRecipientId, doc.fields, selectedFieldId]);
+
 
     const renderPdf = useCallback(async (fileData: string) => {
       setLoading(true);
@@ -105,7 +121,7 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
       }
       
       setLoading(false);
-    }, [doc]);
+    }, [doc, setDoc]);
 
     useEffect(() => {
         if (doc?.file) {
@@ -152,21 +168,19 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
     
     const handleSignYourself = () => {
         if (!doc) return;
-
-        const adminEmail = 'admin@docuseal.com';
-        let selfRecipient = doc.recipients.find(r => r.email === adminEmail);
+        let selfRecipient = doc.recipients.find(r => r.email === userProfile.email);
         let updatedDoc = doc;
 
         if (!selfRecipient) {
             const newRecipient: Recipient = {
                 id: uuidv4(),
-                name: "Admin User",
-                email: adminEmail,
+                name: userProfile.name,
+                email: userProfile.email,
                 status: 'Pending',
             };
             updatedDoc = { ...doc, recipients: [...doc.recipients, newRecipient] };
             setDoc(updatedDoc);
-            logEvent(doc.id, 'recipient.added', `Recipient "Admin User" was added for self-signing.`);
+            logEvent(doc.id, 'recipient.added', `Recipient "${userProfile.name}" was added for self-signing.`);
             selfRecipient = newRecipient;
         }
         
@@ -192,9 +206,12 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
             width: item.type === FieldType.CHECKBOX ? 24 : 160,
             height: item.type === FieldType.CHECKBOX ? 24 : 40,
             recipientId: selectedRecipientId,
+            required: true,
+            label: `${item.type.charAt(0).toUpperCase() + item.type.slice(1).toLowerCase()}`
         };
         const updatedDoc = { ...doc, fields: [...doc.fields, newField] };
         setDoc(updatedDoc);
+        setSelectedFieldId(newField.id);
     };
 
     const handlePlacedFieldMove = (field: DocumentField, deltaX: number, deltaY: number) => {
@@ -205,6 +222,8 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
         const updatedDoc = { ...doc, fields: updatedFields };
         setDoc(updatedDoc);
     };
+
+    const selectedField = doc.fields.find(f => f.id === selectedFieldId);
 
     return (
     <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden">
@@ -219,6 +238,13 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
              <div className="flex items-center space-x-2">
                  {(!isReadOnly && doc.status === DocumentStatus.DRAFT) && (
                     <>
+                        <Tooltip content="Undo">
+                            <Button variant="ghost" size="icon" onClick={undo} disabled={!canUndo}><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v6h6"/><path d="M21 12A9 9 0 0 0 6.42 4.23L3 7.25"/></svg></Button>
+                        </Tooltip>
+                        <Tooltip content="Redo">
+                            <Button variant="ghost" size="icon" onClick={redo} disabled={!canRedo}><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 3v6h-6"/><path d="M3 12a9 9 0 0 0 14.58 6.75L21 16.74"/></svg></Button>
+                        </Tooltip>
+                        <div className="h-6 border-l mx-2"></div>
                         <Button variant="secondary" onClick={handleSignYourself} className="hidden sm:inline-flex">Sign Yourself</Button>
                         <Button onClick={handleSend}>
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 hidden sm:inline-block"><line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
@@ -232,9 +258,7 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
         {/* Editor Body */}
         <div className="flex flex-1 overflow-hidden pt-20">
           {/* Left Thumbnails */}
-          <aside className={`flex-shrink-0 bg-white border-r border-slate-200 p-4 overflow-y-auto transition-all duration-300 w-52 
-            ${isLeftSidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
-            absolute md:relative h-full md:translate-x-0 z-20`}>
+          <aside className="flex-shrink-0 bg-white border-r border-slate-200 p-4 overflow-y-auto transition-all duration-300 w-52 h-full z-20">
               <h3 className="font-semibold text-sm mb-4">Pages</h3>
               <div className="space-y-4">
                   {pdfPages.map((pageData, index) => (
@@ -257,6 +281,8 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
                       fields={doc.fields.filter(f => f.page === index)}
                       onFieldDrop={handleFieldDrop}
                       onPlacedFieldMove={handlePlacedFieldMove}
+                      selectedFieldId={selectedFieldId}
+                      onSelectField={setSelectedFieldId}
                       ref={el => { pageRefs.current[index] = el; }}
                   />
               ))}
@@ -264,11 +290,26 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
           </main>
           
           {/* Right Sidebar */}
-          <aside className={`flex-shrink-0 bg-white border-l border-slate-200 p-4 overflow-y-auto transition-all duration-300 w-80 
-            ${isRightSidebarOpen ? 'translate-x-0' : 'translate-x-full'}
-            absolute md:relative right-0 h-full md:translate-x-0 z-20`}>
+          <aside className="flex-shrink-0 bg-white border-l border-slate-200 overflow-y-auto transition-all duration-300 w-80 h-full z-20">
             {(doc.status === DocumentStatus.DRAFT && !isReadOnly) ? (
-              <DraftSidebar doc={doc} setDoc={setDoc} selectedRecipientId={selectedRecipientId} setSelectedRecipientId={setSelectedRecipientId} logEvent={logEvent} pdfPages={pdfPages} />
+                selectedField ? (
+                    <FieldPropertiesSidebar
+                        field={selectedField}
+                        setDoc={setDoc}
+                        doc={doc}
+                        onBack={() => setSelectedFieldId(null)}
+                    />
+                ) : (
+                    <RecipientsAndFieldsSidebar 
+                        doc={doc} 
+                        setDoc={setDoc}
+                        selectedRecipientId={selectedRecipientId} 
+                        setSelectedRecipientId={setSelectedRecipientId} 
+                        logEvent={logEvent} 
+                        pdfPages={pdfPages}
+                        onSelectField={setSelectedFieldId}
+                    />
+                )
             ) : (
               <SubmissionsSidebar doc={doc} />
             )}
@@ -280,15 +321,15 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
   );
 };
 
-
-const DraftSidebar: React.FC<{
+const RecipientsAndFieldsSidebar: React.FC<{
   doc: Document;
   setDoc: (doc: Document) => void;
   selectedRecipientId: string;
   setSelectedRecipientId: (id: string) => void;
   logEvent: (id: string, type: any, msg: string) => void;
   pdfPages: string[];
-}> = ({ doc, setDoc, selectedRecipientId, setSelectedRecipientId, logEvent, pdfPages }) => {
+  onSelectField: (id: string) => void;
+}> = ({ doc, setDoc, selectedRecipientId, setSelectedRecipientId, logEvent, pdfPages, onSelectField }) => {
   const [isRecipientModalOpen, setRecipientModalOpen] = useState(false);
   const [isNoRecipientAlertOpen, setNoRecipientAlertOpen] = useState(false);
   const selectedRecipient = doc.recipients.find(r => r.id === selectedRecipientId);
@@ -316,7 +357,7 @@ const DraftSidebar: React.FC<{
   };
 
   return (
-    <div className="p-2">
+    <div className="p-4">
       <h3 className="font-bold text-lg mb-4">Recipients</h3>
       <div className="space-y-2 mb-4">
         {doc.recipients.map((r, index) => {
@@ -356,7 +397,7 @@ const DraftSidebar: React.FC<{
       <hr className="my-6"/>
       
       <div className="flex justify-between items-center mb-2">
-        <h3 className="font-bold text-lg">Fields</h3>
+        <h3 className="font-bold text-lg">Standard Fields</h3>
         <Button variant="secondary" size="sm" onClick={handleAutoDetect} disabled={isDetecting}>
           {isDetecting ? <Spinner size="sm"/> : 
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M9.5 2.5a1.5 1.5 0 0 1 3 0"/><path d="M6.02 5.21a1.5 1.5 0 0 1 2.1 0l.98.98a1.5 1.5 0 0 1 0 2.12l-6.2 6.2a1.5 1.5 0 0 1-2.12 0l-.98-.98a1.5 1.5 0 0 1 0-2.12L6.02 5.2Z"/><path d="m15.5 6.5 3 3"/><path d="M12.5 9.5 9.5 6.5"/><path d="m6.5 12.5 3 3"/><path d="m3.5 15.5 3 3"/><path d="M18 11.5a1.5 1.5 0 0 1 3 0"/><path d="M21.5 14.5a1.5 1.5 0 0 1 0 3"/><path d="M18.5 21.5a1.5 1.5 0 0 1-3 0"/></svg>
@@ -370,6 +411,26 @@ const DraftSidebar: React.FC<{
               <DraggableField key={type} type={type} disabled={!selectedRecipientId} />
           ))}
       </div>
+
+      <hr className="my-6"/>
+      <h3 className="font-bold text-lg mb-4">Placed Fields</h3>
+      <div className="space-y-2">
+        {doc.fields.filter(f => f.recipientId === selectedRecipientId).map(field => {
+// Fix: Correctly render the icon by looking it up in the FieldIcons object first.
+const IconComponent = FieldIcons[field.type];
+return (
+<div key={field.id} onClick={() => onSelectField(field.id)} className="p-2 border rounded-md cursor-pointer hover:bg-slate-50 flex items-center text-sm">
+<IconComponent className="w-4 h-4 mr-2 text-slate-500" />
+<span className="truncate flex-1">{field.label || field.type}</span>
+<span className="text-xs text-slate-400">Pg. {field.page + 1}</span>
+</div>
+);
+})}
+         {doc.fields.filter(f => f.recipientId === selectedRecipientId).length === 0 && (
+            <p className="text-sm text-slate-500 text-center py-4">No fields for this recipient.</p>
+         )}
+      </div>
+
       <Modal isOpen={isNoRecipientAlertOpen} onClose={() => setNoRecipientAlertOpen(false)} title="Add a Recipient" size="md">
         <p>Please add at least one recipient before auto-detecting fields.</p>
         <div className="mt-6 flex justify-end">
@@ -380,8 +441,95 @@ const DraftSidebar: React.FC<{
   );
 };
 
+const FieldPropertiesSidebar: React.FC<{
+    field: DocumentField;
+    doc: Document;
+    setDoc: (doc: Document) => void;
+    onBack: () => void;
+}> = ({ field, doc, setDoc, onBack }) => {
+
+    const updateField = (props: Partial<DocumentField>) => {
+        const updatedFields = doc.fields.map(f => f.id === field.id ? { ...f, ...props } : f);
+        setDoc({ ...doc, fields: updatedFields });
+    };
+
+    const deleteField = () => {
+        const updatedFields = doc.fields.filter(f => f.id !== field.id);
+        setDoc({ ...doc, fields: updatedFields });
+        onBack(); // Go back to the list
+    };
+
+    const handleAddOption = () => {
+        const newOptions = [...(field.options || []), `Option ${ (field.options?.length || 0) + 1}`];
+        updateField({ options: newOptions });
+    };
+
+    const handleOptionChange = (index: number, value: string) => {
+        const newOptions = [...(field.options || [])];
+        newOptions[index] = value;
+        updateField({ options: newOptions });
+    };
+    
+    const handleRemoveOption = (index: number) => {
+        const newOptions = (field.options || []).filter((_, i) => i !== index);
+        updateField({ options: newOptions });
+    };
+
+    const recipient = doc.recipients.find(r => r.id === field.recipientId);
+    const recipientColor = getRecipientColor(doc.recipients.findIndex(r => r.id === field.recipientId));
+    
+    return (
+        <div className="p-4 h-full flex flex-col">
+            <div className="flex-grow">
+                <div className="flex items-center mb-6">
+                    <Button variant="ghost" size="icon" onClick={onBack} className="mr-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    </Button>
+                    <h3 className="font-bold text-lg">Field Properties</h3>
+                </div>
+                <div className={`p-3 rounded-lg flex items-center border mb-6 ${recipientColor.border} ${recipientColor.bg}`}>
+                    <span className={`w-3 h-3 rounded-full mr-3 flex-shrink-0 ${recipientColor.dot}`}></span>
+                    <div className="min-w-0">
+                        <p className={`font-semibold text-sm truncate ${recipientColor.text}`}>Assigned to: {recipient?.name}</p>
+                    </div>
+                </div>
+                <div className="space-y-4">
+                    <Input label="Field Label" value={field.label || ''} onChange={e => updateField({ label: e.target.value })} />
+                    <Input label="Placeholder" value={field.placeholder || ''} onChange={e => updateField({ placeholder: e.target.value })} />
+                    <div className="flex items-center justify-between pt-2">
+                        <label className="text-sm font-medium text-slate-700">Required Field</label>
+                        <input type="checkbox" checked={field.required} onChange={e => updateField({ required: e.target.checked })} className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
+                    </div>
+
+                    {(field.type === FieldType.SELECT || field.type === FieldType.RADIO) && (
+                        <div className="space-y-2 pt-4">
+                            <h4 className="text-sm font-medium text-slate-700">Options</h4>
+                            {(field.options || []).map((option, index) => (
+                                <div key={index} className="flex items-center space-x-2">
+                                    <Input value={option} onChange={e => handleOptionChange(index, e.target.value)} className="h-9"/>
+                                    <Button variant="ghost" size="icon" onClick={() => handleRemoveOption(index)} className="w-9 h-9 flex-shrink-0">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                    </Button>
+                                </div>
+                            ))}
+                            <Button variant="link" onClick={handleAddOption}>+ Add Option</Button>
+                        </div>
+                    )}
+                </div>
+            </div>
+            <div className="flex-shrink-0 mt-6">
+                <Button variant="danger" className="w-full" onClick={deleteField}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    Delete Field
+                </Button>
+            </div>
+        </div>
+    );
+};
+
 const SubmissionsSidebar: React.FC<{ doc: Document }> = ({ doc }) => {
   return (
+    <div className="p-2">
     <Tabs defaultValue="submissions">
       <TabsList className="grid w-full grid-cols-2">
         <TabsTrigger value="submissions">Submissions</TabsTrigger>
@@ -430,6 +578,7 @@ const SubmissionsSidebar: React.FC<{ doc: Document }> = ({ doc }) => {
         </div>
       </TabsContent>
     </Tabs>
+    </div>
   );
 };
 
@@ -437,8 +586,10 @@ const SubmissionsSidebar: React.FC<{ doc: Document }> = ({ doc }) => {
 const PdfPage = React.forwardRef<HTMLDivElement, {
     pageIndex: number, pageData: string, fields: DocumentField[],
     onFieldDrop: (item: { type: FieldType }, page: number, x: number, y: number) => void,
-    onPlacedFieldMove: (field: DocumentField, deltaX: number, deltaY: number) => void
-}>(({ pageIndex, pageData, fields, onFieldDrop, onPlacedFieldMove }, ref) => {
+    onPlacedFieldMove: (field: DocumentField, deltaX: number, deltaY: number) => void,
+    selectedFieldId: string | null,
+    onSelectField: (id: string) => void,
+}>(({ pageIndex, pageData, fields, onFieldDrop, onPlacedFieldMove, selectedFieldId, onSelectField }, ref) => {
     
     const pageContainerRef = useRef<HTMLDivElement>(null);
     const [, drop] = useDrop(() => ({
@@ -452,14 +603,20 @@ const PdfPage = React.forwardRef<HTMLDivElement, {
                 onFieldDrop(item, pageIndex, x, y);
             }
         },
-    }), [pageIndex]);
+    }), [pageIndex, onFieldDrop]);
 
     return (
         <div ref={ref}>
             <div ref={pageContainerRef} className="relative shadow-xl mb-8 bg-white rounded-lg overflow-hidden">
                 <div ref={drop as any} className="absolute inset-0 z-10">
                     {fields.map((field) => (
-                        <PlacedField key={field.id} field={field} onMove={onPlacedFieldMove} />
+                        <PlacedField 
+                            key={field.id}
+                            field={field}
+                            onMove={onPlacedFieldMove}
+                            onSelect={onSelectField}
+                            isSelected={selectedFieldId === field.id}
+                        />
                     ))}
                 </div>
                 <img src={pageData} alt={`Page ${pageIndex + 1}`} className="w-full h-auto" />
@@ -470,8 +627,10 @@ const PdfPage = React.forwardRef<HTMLDivElement, {
 
 const PlacedField: React.FC<{
     field: DocumentField,
-    onMove: (field: DocumentField, deltaX: number, deltaY: number) => void
-}> = ({ field, onMove }) => {
+    onMove: (field: DocumentField, deltaX: number, deltaY: number) => void,
+    onSelect: (id: string) => void,
+    isSelected: boolean,
+}> = ({ field, onMove, onSelect, isSelected }) => {
     const { getDocument } = useContext(AppContext);
     const doc = getDocument(useParams<{documentId: string}>().documentId!)!;
     const recipientIndex = doc.recipients.findIndex(r => r.id === field.recipientId);
@@ -489,15 +648,20 @@ const PlacedField: React.FC<{
         collect: monitor => ({ isDragging: !!monitor.isDragging() }),
     }), [field, onMove]);
     
+    const borderStyle = isSelected 
+      ? `border-solid ${color.border} ring-2 ring-offset-2 ring-blue-500` 
+      : `border-dashed ${color.border}`;
+
     return (
         <div
             ref={drag as any}
+            onClick={(e) => { e.stopPropagation(); onSelect(field.id); }}
             style={{ left: field.x, top: field.y, width: field.width, height: field.height }}
-            className={`absolute flex items-center justify-center cursor-move p-1 ${isDragging ? 'opacity-50' : ''} ${color.border} border-2 rounded-md`}
+            className={`absolute flex items-center justify-center cursor-move p-1 ${isDragging ? 'opacity-50' : ''} border-2 rounded-md ${borderStyle}`}
         >
             <div className={`w-full h-full ${color.bg} opacity-50`}></div>
-            <div className="absolute text-center select-none">
-                <p className={`text-xs font-bold ${color.text}`}>{getInitials(doc.recipients[recipientIndex]?.name || '??')}</p>
+            <div className="absolute text-center select-none p-1">
+                <p className={`text-xs font-bold ${color.text} truncate`}>{field.label || getInitials(doc.recipients[recipientIndex]?.name || '??')}</p>
                 <p className={`text-[9px] ${color.text} capitalize`}>{field.type.toLowerCase()}</p>
             </div>
         </div>

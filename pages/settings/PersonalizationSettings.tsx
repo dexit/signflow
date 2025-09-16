@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useRef } from 'react';
 import { AppContext } from '../../context/AppContext';
 import { Card, CardHeader, CardTitle, CardContent, Accordion, AccordionItem, AccordionTrigger, AccordionContent, Input, Button } from '../../components/ui';
 
@@ -6,6 +6,7 @@ const PersonalizationSettings: React.FC = () => {
     const { userProfile, updateSettings } = useContext(AppContext);
     const [settings, setSettings] = useState(userProfile.settings.personalization);
     const [saved, setSaved] = useState(false);
+    const logoInputRef = useRef<HTMLInputElement>(null);
 
     const handleSave = () => {
         updateSettings({ personalization: settings });
@@ -25,6 +26,17 @@ const PersonalizationSettings: React.FC = () => {
                 [key]: value
             }
         }));
+    };
+    
+    const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                handleChange('companyLogo', reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
     };
 
     return (
@@ -55,11 +67,28 @@ const PersonalizationSettings: React.FC = () => {
 
             <Card>
                 <CardHeader><CardTitle>Company Logo</CardTitle></CardHeader>
-                <CardContent className="bg-slate-50 border border-slate-200 rounded-md p-6 text-center">
-                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-slate-400 inline mr-2"><path fillRule="evenodd" d="M10 1a4.5 4.5 0 0 0-4.5 4.5V9H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-.5V5.5A4.5 4.5 0 0 0 10 1Zm3 8V5.5a3 3 0 1 0-6 0V9h6Z" clipRule="evenodd" /></svg>
-                     <span className="font-semibold">Unlock with DocuSeal Pro</span>
-                     <p className="text-sm text-slate-500 mt-1">Display your company name and logo when signing documents.</p>
-                     <Button variant="link" className="text-sm">Learn More</Button>
+                <CardContent>
+                    <input type="file" accept="image/*" ref={logoInputRef} onChange={handleLogoUpload} className="hidden" />
+                    {settings.companyLogo ? (
+                        <div className="flex items-center space-x-4">
+                            <div className="p-2 border rounded-md bg-white">
+                                <img src={settings.companyLogo} alt="Company Logo" className="h-16" />
+                            </div>
+                            <div>
+                                <Button variant="secondary" onClick={() => logoInputRef.current?.click()}>Change Logo</Button>
+                                <Button variant="ghost" onClick={() => handleChange('companyLogo', null)} className="ml-2">Remove</Button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div 
+                            className="border-2 border-dashed border-slate-300 rounded-md p-8 text-center cursor-pointer hover:bg-slate-50"
+                            onClick={() => logoInputRef.current?.click()}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mx-auto text-slate-400 mb-2"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                            <h3 className="text-sm font-medium text-slate-900">Upload your logo</h3>
+                            <p className="mt-1 text-sm text-slate-500">PNG, JPG, GIF up to 5MB.</p>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
             

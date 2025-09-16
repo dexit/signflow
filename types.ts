@@ -25,7 +25,13 @@ export interface DocumentField {
   value?: string; // For text, name, date, signature data URL, or 'true' for checkbox
   metadata?: {
     signedAt?: string;
-  }
+  };
+  // --- START: Added detailed field properties ---
+  label?: string;
+  placeholder?: string;
+  options?: string[];
+  required?: boolean;
+  // --- END: Added detailed field properties ---
 }
 
 export interface Recipient {
@@ -50,7 +56,7 @@ export enum DocumentStatus {
 
 export interface Event {
   id: string;
-  type: 'document.created' | 'document.sent' | 'recipient.added' | 'recipient.opened' | 'recipient.signed';
+  type: 'document.created' | 'document.sent' | 'recipient.added' | 'recipient.opened' | 'recipient.signed' | 'document.edited';
   message: string;
   timestamp: string;
 }
@@ -138,6 +144,8 @@ export interface UserSettings {
 // --- END: Updated UserSettings ---
 
 export interface UserProfile {
+  name: string;
+  email: string;
   signature?: string;
   initials?: string;
   settings: UserSettings;

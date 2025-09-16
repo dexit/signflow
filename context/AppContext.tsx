@@ -44,6 +44,13 @@ const defaultSettings: UserSettings = {
     storage: { provider: 'disk' },
 };
 
+const defaultUserProfile: UserProfile = {
+    name: 'Admin User',
+    email: 'admin@docuseal.com',
+    settings: defaultSettings,
+};
+
+
 export const AppContext = createContext<AppContextType>({
   isAuthenticated: false,
   login: () => {},
@@ -54,7 +61,7 @@ export const AppContext = createContext<AppContextType>({
   getDocument: () => undefined,
   getDocumentByShareId: () => undefined,
   logEvent: () => {},
-  userProfile: { settings: defaultSettings },
+  userProfile: defaultUserProfile,
   updateUserProfile: () => {},
   updateSettings: () => {},
 });
@@ -106,7 +113,7 @@ const getInitialState = <T,>(key: string, defaultValue: T): T => {
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => getInitialState('isAuthenticated', false));
   const [documents, setDocuments] = useState<Document[]>(() => getInitialState('documents', []));
-  const [userProfile, setUserProfile] = useState<UserProfile>(() => getInitialState('userProfile', { settings: defaultSettings }));
+  const [userProfile, setUserProfile] = useState<UserProfile>(() => getInitialState('userProfile', defaultUserProfile));
 
   useEffect(() => {
     localStorage.setItem('isAuthenticated', JSON.stringify(isAuthenticated));

@@ -45,7 +45,7 @@ const EmailSettings: React.FC = () => {
 
                 <TabsContent value="smtp">
                     {settings.provider === 'smtp' && (
-                        <div className="space-y-4">
+                        <div className="space-y-4 pt-6">
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <Input label="Host" id="host" placeholder="smtp.example.com" value={settings.smtpHost} onChange={e => handleChange('smtpHost', e.target.value)} />
                             <Input label="Port" id="port" placeholder="587" value={settings.smtpPort} onChange={e => handleChange('smtpPort', e.target.value)} />
@@ -79,7 +79,7 @@ const EmailSettings: React.FC = () => {
                 </TabsContent>
                 <TabsContent value="msGraph">
                      {settings.provider === 'msGraph' && (
-                        <div className="space-y-4">
+                        <div className="space-y-4 pt-6">
                           <Input label="Client ID" value={settings.clientId} onChange={e => handleChange('clientId', e.target.value)} />
                           <Input label="Tenant ID" value={settings.tenantId} onChange={e => handleChange('tenantId', e.target.value)} />
                           <Input label="Client Secret" type="password" value={settings.clientSecret} onChange={e => handleChange('clientSecret', e.target.value)} />
@@ -88,7 +88,7 @@ const EmailSettings: React.FC = () => {
                 </TabsContent>
                  <TabsContent value="webhook">
                      {settings.provider === 'webhook' && (
-                        <div className="space-y-4">
+                        <div className="space-y-4 pt-6">
                             <Input label="Webhook URL" placeholder="https://your-endpoint.com/email-hook" value={settings.url} onChange={e => handleChange('url', e.target.value)} />
                         </div>
                     )}

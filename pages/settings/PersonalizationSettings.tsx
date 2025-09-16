@@ -32,7 +32,6 @@ const PersonalizationSettings: React.FC = () => {
             <Card>
                 <CardHeader><CardTitle>Email Templates</CardTitle></CardHeader>
                 <CardContent>
-                    {/* Fix: Remove unsupported 'type' and 'collapsible' props from Accordion. */}
                     <Accordion defaultValue="signature-request">
                         <AccordionItem value="signature-request">
                             <AccordionTrigger>Signature Request Email</AccordionTrigger>

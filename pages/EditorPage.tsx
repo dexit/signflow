@@ -6,8 +6,6 @@ import { Document, FieldType, DocumentField, Recipient, DocumentStatus, Event } 
 import { v4 as uuidv4 } from 'uuid';
 import { Button, Modal, Input, Spinner, Tooltip, Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui';
 import { useFieldDetector } from '../hooks/useFieldDetector';
-// Fix: Import Sidebar component to resolve 'Cannot find name' error.
-import Sidebar from '../components/Sidebar';
 
 const ItemTypes = {
   FIELD: 'field',
@@ -89,7 +87,7 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
 
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale: 1.5 });
+        const viewport = page.getViewport({ scale: 2.0 }); // Higher scale for better quality
         pageDimensions.push({ width: viewport.width, height: viewport.height });
         const canvas = document.createElement('canvas');
         canvas.width = viewport.width;
@@ -177,11 +175,8 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
     
     if (loading || !doc) {
       return (
-        <div className="flex h-screen bg-slate-100">
-            <Sidebar />
-            <div className="flex-1 flex justify-center items-center">
-                <Spinner size="lg" /><p className="ml-4 text-slate-600">Preparing Document...</p>
-            </div>
+        <div className="flex h-screen w-screen bg-slate-50 justify-center items-center">
+            <Spinner size="lg" /><p className="ml-4 text-slate-600 text-lg">Preparing Document...</p>
         </div>
       );
     }
@@ -194,8 +189,8 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
             page,
             x: dropX,
             y: dropY,
-            width: 150,
-            height: item.type === FieldType.CHECKBOX ? 20 : 40,
+            width: item.type === FieldType.CHECKBOX ? 24 : 160,
+            height: item.type === FieldType.CHECKBOX ? 24 : 40,
             recipientId: selectedRecipientId,
         };
         const updatedDoc = { ...doc, fields: [...doc.fields, newField] };
@@ -212,52 +207,47 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
     };
 
     return (
-    <div className="flex h-screen bg-slate-100 text-slate-900">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden">
         {/* Header */}
-        <header className="flex-shrink-0 bg-white border-b border-slate-200 z-20">
-            <div className="flex items-center justify-between p-4 h-20">
-                <div className="flex items-center min-w-0">
-                    <Button variant="ghost" size="icon" className="md:hidden mr-2" onClick={() => setLeftSidebarOpen(!isLeftSidebarOpen)}>
-                       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
-                    </Button>
-                    <h2 className="text-xl font-bold text-slate-800 truncate" title={doc.name}>{doc.name}</h2>
-                </div>
-                 <div className="flex items-center space-x-2">
-                    <Button variant="secondary" onClick={() => navigate('/dashboard')}>Back</Button>
-                     {(!isReadOnly && doc.status === DocumentStatus.DRAFT) && (
-                        <>
-                            <Button variant="secondary" onClick={handleSignYourself}>Sign Yourself</Button>
-                            <Button onClick={handleSend}>Send</Button>
-                        </>
-                     )}
-                    <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setRightSidebarOpen(!isRightSidebarOpen)}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" x2="16" y1="6" y2="6"/><line x1="3" x2="16" y1="12" y2="12"/><line x1="3" x2="16" y1="18" y2="18"/><line x1="21" x2="21.01" y1="6" y2="6"/><line x1="21" x2="21.01" y1="12" y2="12"/><line x1="21" x2="21.01" y1="18" y2="18"/></svg>
-                    </Button>
-                </div>
+        <header className="absolute top-0 left-0 right-0 flex items-center justify-between p-4 h-20 bg-white/80 backdrop-blur-lg border-b border-slate-200 z-30">
+            <div className="flex items-center min-w-0">
+                <Button variant="secondary" onClick={() => navigate('/dashboard')} className="mr-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                </Button>
+                <h2 className="text-xl font-bold text-slate-800 truncate" title={doc.name}>{doc.name}</h2>
+            </div>
+             <div className="flex items-center space-x-2">
+                 {(!isReadOnly && doc.status === DocumentStatus.DRAFT) && (
+                    <>
+                        <Button variant="secondary" onClick={handleSignYourself} className="hidden sm:inline-flex">Sign Yourself</Button>
+                        <Button onClick={handleSend}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 hidden sm:inline-block"><line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                            Send
+                        </Button>
+                    </>
+                 )}
             </div>
         </header>
 
         {/* Editor Body */}
-        <div className="flex flex-1 overflow-hidden relative">
+        <div className="flex flex-1 overflow-hidden pt-20">
           {/* Left Thumbnails */}
-          <aside className={`flex-shrink-0 bg-slate-50 border-r border-slate-200 p-4 overflow-y-auto transition-all duration-300 w-48 
+          <aside className={`flex-shrink-0 bg-white border-r border-slate-200 p-4 overflow-y-auto transition-all duration-300 w-52 
             ${isLeftSidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
-            absolute md:relative h-full md:translate-x-0 z-10`}>
+            absolute md:relative h-full md:translate-x-0 z-20`}>
               <h3 className="font-semibold text-sm mb-4">Pages</h3>
               <div className="space-y-4">
                   {pdfPages.map((pageData, index) => (
-                      <div key={index} onClick={() => pageRefs.current[index]?.scrollIntoView({ behavior: 'smooth' })} className="cursor-pointer border-2 border-transparent hover:border-primary-500 rounded-md overflow-hidden">
+                      <div key={index} onClick={() => pageRefs.current[index]?.scrollIntoView({ behavior: 'smooth', block: 'center' })} className="cursor-pointer border-2 border-transparent hover:border-primary-500 rounded-md overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                           <img src={pageData} alt={`Page ${index+1} thumbnail`} className="w-full h-auto"/>
-                          <p className="text-center text-xs p-1 bg-white">{index+1}</p>
+                          <p className="text-center text-xs p-1 bg-slate-100">{index+1}</p>
                       </div>
                   ))}
               </div>
           </aside>
 
           {/* Main Content - PDF Viewer */}
-          <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-200">
+          <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-100">
             <div className="max-w-4xl mx-auto">
               {pdfPages.map((pageData, index) => (
                   <PdfPage 
@@ -276,7 +266,7 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
           {/* Right Sidebar */}
           <aside className={`flex-shrink-0 bg-white border-l border-slate-200 p-4 overflow-y-auto transition-all duration-300 w-80 
             ${isRightSidebarOpen ? 'translate-x-0' : 'translate-x-full'}
-            absolute md:relative right-0 h-full md:translate-x-0 z-10`}>
+            absolute md:relative right-0 h-full md:translate-x-0 z-20`}>
             {(doc.status === DocumentStatus.DRAFT && !isReadOnly) ? (
               <DraftSidebar doc={doc} setDoc={setDoc} selectedRecipientId={selectedRecipientId} setSelectedRecipientId={setSelectedRecipientId} logEvent={logEvent} pdfPages={pdfPages} />
             ) : (
@@ -327,14 +317,14 @@ const DraftSidebar: React.FC<{
   };
 
   return (
-    <div>
+    <div className="p-2">
       <h3 className="font-bold text-lg mb-4">Recipients</h3>
       <div className="space-y-2 mb-4">
         {doc.recipients.map((r, index) => {
           const color = getRecipientColor(index);
           return (
             <div key={r.id} onClick={() => setSelectedRecipientId(r.id)} 
-                 className={`p-3 rounded-md cursor-pointer flex items-center justify-between ${selectedRecipientId === r.id ? `bg-primary-100 ring-2 ring-primary-500` : 'bg-slate-100 hover:bg-slate-200'}`}>
+                 className={`p-3 rounded-lg cursor-pointer flex items-center justify-between border-2 transition-all ${selectedRecipientId === r.id ? `bg-primary-50 border-primary-500` : 'bg-slate-50 hover:bg-slate-100 border-transparent'}`}>
               <div className="flex items-center min-w-0">
                   <span className={`w-3 h-3 rounded-full mr-3 flex-shrink-0 ${color.dot}`}></span>
                   <div className="min-w-0">
@@ -467,7 +457,7 @@ const PdfPage = React.forwardRef<HTMLDivElement, {
 
     return (
         <div ref={ref}>
-            <div ref={pageContainerRef} className="relative shadow-lg mb-8 bg-white">
+            <div ref={pageContainerRef} className="relative shadow-xl mb-8 bg-white rounded-lg overflow-hidden">
                 <div ref={drop as any} className="absolute inset-0 z-10">
                     {fields.map((field) => (
                         <PlacedField key={field.id} field={field} onMove={onPlacedFieldMove} />
@@ -504,12 +494,12 @@ const PlacedField: React.FC<{
         <div
             ref={drag as any}
             style={{ left: field.x, top: field.y, width: field.width, height: field.height }}
-            className={`absolute flex items-center justify-center cursor-move p-1 ${isDragging ? 'opacity-50' : ''} ${color.border} border-2 rounded`}
+            className={`absolute flex items-center justify-center cursor-move p-1 ${isDragging ? 'opacity-50' : ''} ${color.border} border-2 rounded-md`}
         >
             <div className={`w-full h-full ${color.bg} opacity-50`}></div>
-            <div className="absolute text-center">
+            <div className="absolute text-center select-none">
                 <p className={`text-xs font-bold ${color.text}`}>{getInitials(doc.recipients[recipientIndex]?.name || '??')}</p>
-                <p className={`text-[8px] ${color.text}`}>{field.type}</p>
+                <p className={`text-[9px] ${color.text} capitalize`}>{field.type.toLowerCase()}</p>
             </div>
         </div>
     );
@@ -596,9 +586,9 @@ const DraggableField: React.FC<{ type: FieldType; disabled: boolean; }> = ({ typ
     const Icon = FieldIcons[type];
     return (
         <Tooltip content={disabled ? "Select a recipient first" : `Drag to add a ${type} field`}>
-            <div ref={drag as any} className={`flex items-center p-2 border rounded-md ${disabled ? 'cursor-not-allowed bg-slate-100 text-slate-400' : 'cursor-move bg-white hover:bg-slate-50'} ${isDragging ? 'opacity-50 bg-primary-100' : ''}`}>
+            <div ref={drag as any} className={`flex items-center p-2 border rounded-lg ${disabled ? 'cursor-not-allowed bg-slate-100 text-slate-400' : 'cursor-move bg-white hover:bg-slate-50'} ${isDragging ? 'opacity-50 bg-primary-100' : ''}`}>
                 <Icon className="w-5 h-5 mr-2"/>
-                <span className="text-sm">{type.charAt(0) + type.slice(1).toLowerCase()}</span>
+                <span className="text-sm capitalize">{type.toLowerCase()}</span>
             </div>
         </Tooltip>
     );

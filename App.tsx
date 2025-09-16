@@ -51,7 +51,7 @@ function App() {
             <Route path="/edit/:shareId" element={<SharedDocumentPage />} />
             
             <Route path="/dashboard" element={<AppLayout><DashboardPage /></AppLayout>} />
-            <Route path="/upload" element={<AppLayout><UploadPage /></AppLayout>} />
+            <Route path="/upload" element={<Navigate to="/dashboard" />} />
             <Route path="/documents" element={<AppLayout><DashboardPage /></AppLayout>} />
             <Route path="/editor/:documentId" element={<EditorPage />} />
             <Route path="/settings/*" element={<SettingsPage />} />

@@ -1,7 +1,7 @@
-import React, { useContext, useState, useRef } from 'react';
+import React, { useContext, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppContext } from '../context/AppContext';
-import { Button, Spinner, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, Modal } from '../components/ui';
+import { Button, Spinner, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, Modal, Card, CardContent } from '../components/ui';
 import { Document, DocumentStatus } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import ShareModal from '../components/ShareModal';
@@ -10,14 +10,13 @@ import { usePdfGenerator } from '../hooks/usePdfGenerator';
 const DashboardPage: React.FC = () => {
   const { documents, addDocument, updateDocument, logEvent } = useContext(AppContext);
   const navigate = useNavigate();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
   const [isShareModalOpen, setShareModalOpen] = useState(false);
   const { isGenerating, generateAndDownloadPdf } = usePdfGenerator();
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
-
-
+  const [isDragging, setIsDragging] = useState(false);
+  
   const openShareModal = (doc: Document) => {
     setSelectedDoc(doc);
     setShareModalOpen(true);
@@ -57,9 +56,7 @@ const DashboardPage: React.FC = () => {
     logEvent(reopenedDoc.id, 'document.sent', `Document re-opened by user.`);
   };
 
-
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  const processFile = useCallback((file: File) => {
     if (file && file.type === 'application/pdf') {
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -82,145 +79,102 @@ const DashboardPage: React.FC = () => {
     } else {
       setAlertMessage('Please upload a valid PDF file.');
     }
-    if(fileInputRef.current) {
-        fileInputRef.current.value = "";
-    }
+  }, [addDocument, logEvent, navigate]);
+
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); };
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); };
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); e.stopPropagation(); };
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault(); e.stopPropagation(); setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) processFile(file);
   };
 
-  const statusColor = (status: DocumentStatus) => {
+  const statusInfo = (status: DocumentStatus) => {
     switch (status) {
-      case DocumentStatus.DRAFT: return 'bg-amber-100 text-amber-800';
-      case DocumentStatus.SENT: return 'bg-blue-100 text-blue-800';
-      case DocumentStatus.COMPLETED: return 'bg-emerald-100 text-emerald-800';
-      default: return 'bg-slate-100 text-slate-800';
+      case DocumentStatus.DRAFT: return { color: 'bg-amber-100 text-amber-800', text: 'Draft' };
+      case DocumentStatus.SENT: return { color: 'bg-blue-100 text-blue-800', text: 'Sent' };
+      case DocumentStatus.COMPLETED: return { color: 'bg-emerald-100 text-emerald-800', text: 'Completed' };
+      default: return { color: 'bg-slate-100 text-slate-800', text: 'Unknown' };
     }
-  };
-
-  const handleRowClick = (doc: Document) => {
-    navigate(`/editor/${doc.id}`);
   };
 
   return (
     <div>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
         <h1 className="text-3xl font-bold text-slate-900">Documents</h1>
-        <div>
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileUpload}
-            accept=".pdf"
-            className="hidden"
-          />
-          <Button onClick={() => fileInputRef.current?.click()}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-            New Document
-          </Button>
-        </div>
       </div>
       
-      <div className="bg-white shadow-sm sm:rounded-lg border border-slate-200">
-        {documents.length > 0 ? (
-           <div className="divide-y divide-slate-200">
-            {documents.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((doc) => (
-              <div key={doc.id} onClick={() => handleRowClick(doc)} className="block hover:bg-slate-50 cursor-pointer p-4 sm:p-0">
-                  {/* Mobile/Tablet view */}
-                  <div className="sm:hidden">
-                    <div className="flex items-center justify-between">
-                       <p className="text-md font-medium text-primary-700 truncate">{doc.name}</p>
-                       <div onClick={e => e.stopPropagation()}>
-                           <DropdownMenu>
-                              <DropdownMenuTrigger>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 -mr-2">
-                                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent>
-                                <DropdownMenuItem onSelect={() => navigate(`/editor/${doc.id}`)}>
-                                  {doc.status === DocumentStatus.DRAFT ? 'Edit' : 'View'}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => openShareModal(doc)}>Share</DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => handleDuplicate(doc)}>Duplicate</DropdownMenuItem>
-                                {[DocumentStatus.SENT, DocumentStatus.COMPLETED].includes(doc.status) && (
-                                  <DropdownMenuItem onSelect={() => handleDownload(doc)} disabled={isGenerating && generatingId === doc.id}>
-                                      {isGenerating && generatingId === doc.id ? 'Downloading...' : 'Download'}
-                                  </DropdownMenuItem>
-                                )}
-                                {doc.status === DocumentStatus.COMPLETED && (
-                                    <DropdownMenuItem onSelect={() => handleReopen(doc)}>Re-open</DropdownMenuItem>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                         </div>
-                    </div>
-                    <div className="mt-2 flex items-center justify-between">
-                       <p className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColor(doc.status)}`}>
-                          {doc.status}
-                        </p>
-                       <p className="text-sm text-slate-500">
-                          {new Date(doc.createdAt).toLocaleDateString()}
-                        </p>
-                    </div>
-                  </div>
-                
-                  {/* Desktop view */}
-                  <div className="hidden sm:flex items-center px-4 py-4 sm:px-6">
-                    <div className="min-w-0 flex-1 sm:flex sm:items-center sm:justify-between">
-                        <div>
-                            <p className="text-md font-medium text-primary-700 truncate">{doc.name}</p>
-                            <p className="mt-2 flex items-center text-sm text-slate-500">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 mr-1.5 h-5 w-5 text-slate-400"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                                {doc.recipients.length} Recipient(s)
-                            </p>
-                        </div>
-                        <div className="mt-4 flex-shrink-0 sm:mt-0 sm:ml-5">
-                            <p className="flex items-center text-sm text-slate-500">
-                                <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-slate-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" /></svg>
-                                Created on {new Date(doc.createdAt).toLocaleDateString()}
-                            </p>
-                        </div>
-                    </div>
-                    <div className="ml-5 flex-shrink-0 flex items-center space-x-4">
-                        <p className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColor(doc.status)}`}>
-                          {doc.status}
-                        </p>
-                         <div onClick={e => e.stopPropagation()}>
-                           <DropdownMenu>
-                              <DropdownMenuTrigger>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent>
-                                <DropdownMenuItem onSelect={() => navigate(`/editor/${doc.id}`)}>
-                                  {doc.status === DocumentStatus.DRAFT ? 'Edit' : 'View'}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => openShareModal(doc)}>Share</DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => handleDuplicate(doc)}>Duplicate</DropdownMenuItem>
-                                {[DocumentStatus.SENT, DocumentStatus.COMPLETED].includes(doc.status) && (
-                                  <DropdownMenuItem onSelect={() => handleDownload(doc)} disabled={isGenerating && generatingId === doc.id}>
-                                      {isGenerating && generatingId === doc.id ? <div className="flex items-center"><Spinner size="sm" /> <span className="ml-2">Downloading...</span></div> : 'Download'}
-                                  </DropdownMenuItem>
-                                )}
-                                {doc.status === DocumentStatus.COMPLETED && (
-                                    <DropdownMenuItem onSelect={() => handleReopen(doc)}>Re-open</DropdownMenuItem>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                         </div>
-                      </div>
-                  </div>
-              </div>
-            ))}
+      {documents.length === 0 ? (
+        <div 
+          className={`relative flex justify-center items-center w-full h-96 border-4 border-dashed rounded-lg transition-colors ${isDragging ? 'border-primary-500 bg-primary-50' : 'border-slate-300 bg-white'}`}
+          onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragOver={handleDragOver} onDrop={handleDrop}
+        >
+            <input type="file" onChange={(e) => e.target.files && processFile(e.target.files[0])} accept=".pdf" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+            <div className="text-center p-4">
+                 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="mx-auto text-slate-400 mb-4"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                <p className="text-lg font-semibold text-slate-700">Drag & drop your PDF here</p>
+                <p className="text-slate-500 my-2">or click to browse</p>
+            </div>
+        </div>
+      ) : (
+        <>
+          <div 
+            className={`relative flex justify-center items-center w-full mb-8 p-6 border-2 border-dashed rounded-lg transition-colors ${isDragging ? 'border-primary-500 bg-primary-50' : 'border-slate-300 bg-white'}`}
+            onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragOver={handleDragOver} onDrop={handleDrop}
+          >
+            <input type="file" onChange={(e) => e.target.files && processFile(e.target.files[0])} accept=".pdf" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+            <div className="text-center text-slate-600">
+              <p>Drag & drop another PDF or click here to upload</p>
+            </div>
           </div>
-        ) : (
-          <div className="text-center py-12 px-4">
-            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="mx-auto text-slate-400"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
-            <h3 className="mt-2 text-sm font-medium text-slate-900">No documents</h3>
-            <p className="mt-1 text-sm text-slate-500">Get started by uploading a new document.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {documents.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((doc) => {
+              const s = statusInfo(doc.status);
+              return (
+              <Card key={doc.id} className="hover:shadow-lg transition-shadow cursor-pointer">
+                <CardContent className="p-5" onClick={() => navigate(`/editor/${doc.id}`)}>
+                  <div className="flex justify-between items-start">
+                    <span className={`px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${s.color}`}>
+                      {s.text}
+                    </span>
+                     <div onClick={e => e.stopPropagation()}>
+                       <DropdownMenu>
+                          <DropdownMenuTrigger>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 -mr-2">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent>
+                            <DropdownMenuItem onSelect={() => navigate(`/editor/${doc.id}`)}>
+                              {doc.status === DocumentStatus.DRAFT ? 'Edit' : 'View'}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => openShareModal(doc)}>Share</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => handleDuplicate(doc)}>Duplicate</DropdownMenuItem>
+                            {[DocumentStatus.SENT, DocumentStatus.COMPLETED].includes(doc.status) && (
+                              <DropdownMenuItem onSelect={() => handleDownload(doc)} disabled={isGenerating && generatingId === doc.id}>
+                                  {isGenerating && generatingId === doc.id ? <div className="flex items-center"><Spinner size="sm" /> <span className="ml-2">Downloading...</span></div> : 'Download'}
+                              </DropdownMenuItem>
+                            )}
+                            {doc.status === DocumentStatus.COMPLETED && (
+                                <DropdownMenuItem onSelect={() => handleReopen(doc)}>Re-open</DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                     </div>
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-800 truncate mt-3" title={doc.name}>{doc.name}</h3>
+                  <p className="text-sm text-slate-500 mt-2">Created: {new Date(doc.createdAt).toLocaleDateString()}</p>
+                  <div className="flex items-center text-sm text-slate-600 mt-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 mr-2 h-5 w-5 text-slate-400"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    {doc.recipients.length} Recipient(s)
+                  </div>
+                </CardContent>
+              </Card>
+            )})}
           </div>
-        )}
-      </div>
+        </>
+      )}
       {selectedDoc && (
         <ShareModal
             isOpen={isShareModalOpen}

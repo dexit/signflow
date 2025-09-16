@@ -31,7 +31,7 @@ const DashboardPage: React.FC = () => {
 
   const handleDuplicate = (docToDuplicate: Document) => {
     const newDoc: Document = {
-      ...JSON.parse(JSON.stringify(docToDuplicate)), // Deep copy
+      ...JSON.parse(JSON.stringify(docToDuplicate)),
       id: uuidv4(),
       name: `${docToDuplicate.name} (Copy)`,
       status: DocumentStatus.DRAFT,
@@ -42,6 +42,16 @@ const DashboardPage: React.FC = () => {
     };
     addDocument(newDoc);
     navigate(`/editor/${newDoc.id}`);
+  };
+
+  const handleReopen = (docToReopen: Document) => {
+    const reopenedDoc: Document = {
+      ...docToReopen,
+      status: DocumentStatus.SENT,
+      recipients: docToReopen.recipients.map(r => ({ ...r, status: 'Pending', signedAt: undefined, signatureHash: undefined, auditHash: undefined, ipAddress: undefined })),
+      fields: docToReopen.fields.map(f => ({ ...f, value: undefined, metadata: undefined })),
+    };
+    updateDocument(reopenedDoc);
   };
 
 
@@ -67,7 +77,6 @@ const DashboardPage: React.FC = () => {
     } else {
       setAlertMessage('Please upload a valid PDF file.');
     }
-    // Reset file input to allow uploading the same file again
     if(fileInputRef.current) {
         fileInputRef.current.value = "";
     }
@@ -75,17 +84,21 @@ const DashboardPage: React.FC = () => {
 
   const statusColor = (status: DocumentStatus) => {
     switch (status) {
-      case DocumentStatus.DRAFT: return 'bg-yellow-100 text-yellow-800';
+      case DocumentStatus.DRAFT: return 'bg-amber-100 text-amber-800';
       case DocumentStatus.SENT: return 'bg-blue-100 text-blue-800';
-      case DocumentStatus.COMPLETED: return 'bg-green-100 text-green-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case DocumentStatus.COMPLETED: return 'bg-emerald-100 text-emerald-800';
+      default: return 'bg-slate-100 text-slate-800';
     }
   };
 
+  const handleRowClick = (doc: Document) => {
+    navigate(`/editor/${doc.id}`);
+  };
+
   return (
-    <div className="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
+    <div>
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Documents</h1>
+        <h1 className="text-3xl font-bold text-slate-900">Documents</h1>
         <div>
           <input
             type="file"
@@ -101,16 +114,16 @@ const DashboardPage: React.FC = () => {
         </div>
       </div>
       
-      <div className="bg-white shadow sm:rounded-lg">
+      <div className="bg-white shadow-sm sm:rounded-lg border border-slate-200">
         {documents.length > 0 ? (
-          <ul role="list" className="divide-y divide-gray-200">
+          <ul role="list" className="divide-y divide-slate-200">
             {documents.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((doc) => (
               <li key={doc.id}>
-                <div onClick={() => navigate(`/editor/${doc.id}`)} className="block hover:bg-gray-50 cursor-pointer">
+                <div onClick={() => handleRowClick(doc)} className="block hover:bg-slate-50 cursor-pointer">
                   <div className="px-4 py-4 sm:px-6">
                     <div className="flex items-center justify-between">
-                      <p className="text-md font-medium text-primary-600 truncate">{doc.name}</p>
-                      <div className="ml-2 flex-shrink-0 flex items-center space-x-2">
+                      <p className="text-md font-medium text-primary-700 truncate">{doc.name}</p>
+                      <div className="ml-2 flex-shrink-0 flex items-center space-x-4">
                         <p className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColor(doc.status)}`}>
                           {doc.status}
                         </p>
@@ -122,12 +135,18 @@ const DashboardPage: React.FC = () => {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent>
+                                <DropdownMenuItem onSelect={() => navigate(`/editor/${doc.id}`)}>
+                                  {doc.status === DocumentStatus.DRAFT ? 'Edit' : 'View'}
+                                </DropdownMenuItem>
                                 <DropdownMenuItem onSelect={() => openShareModal(doc)}>Share</DropdownMenuItem>
                                 <DropdownMenuItem onSelect={() => handleDuplicate(doc)}>Duplicate</DropdownMenuItem>
                                 {[DocumentStatus.SENT, DocumentStatus.COMPLETED].includes(doc.status) && (
                                   <DropdownMenuItem onSelect={() => handleDownload(doc)} disabled={isGenerating && generatingId === doc.id}>
                                       {isGenerating && generatingId === doc.id ? <div className="flex items-center"><Spinner size="sm" /> <span className="ml-2">Downloading...</span></div> : 'Download'}
                                   </DropdownMenuItem>
+                                )}
+                                {doc.status === DocumentStatus.COMPLETED && (
+                                    <DropdownMenuItem onSelect={() => handleReopen(doc)}>Re-open</DropdownMenuItem>
                                 )}
                               </DropdownMenuContent>
                             </DropdownMenu>
@@ -136,13 +155,13 @@ const DashboardPage: React.FC = () => {
                     </div>
                     <div className="mt-2 sm:flex sm:justify-between">
                       <div className="sm:flex">
-                        <p className="flex items-center text-sm text-gray-500">
-                           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        <p className="flex items-center text-sm text-slate-500">
+                           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 mr-1.5 h-5 w-5 text-slate-400"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                           {doc.recipients.length} Recipient(s)
                         </p>
                       </div>
-                      <div className="mt-2 flex items-center text-sm text-gray-500 sm:mt-0">
-                        <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <div className="mt-2 flex items-center text-sm text-slate-500 sm:mt-0">
+                        <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-slate-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                           <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
                         </svg>
                         <p>
@@ -157,9 +176,9 @@ const DashboardPage: React.FC = () => {
           </ul>
         ) : (
           <div className="text-center py-12 px-4">
-            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="mx-auto text-gray-400"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No documents</h3>
-            <p className="mt-1 text-sm text-gray-500">Get started by uploading a new document.</p>
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="mx-auto text-slate-400"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+            <h3 className="mt-2 text-sm font-medium text-slate-900">No documents</h3>
+            <p className="mt-1 text-sm text-slate-500">Get started by uploading a new document.</p>
           </div>
         )}
       </div>
@@ -170,7 +189,7 @@ const DashboardPage: React.FC = () => {
             doc={selectedDoc}
         />
       )}
-      <Modal isOpen={!!alertMessage} onClose={() => setAlertMessage(null)} title="Upload Error">
+      <Modal isOpen={!!alertMessage} onClose={() => setAlertMessage(null)} title="Upload Error" size="md">
         <p>{alertMessage}</p>
         <div className="mt-6 flex justify-end">
             <Button onClick={() => setAlertMessage(null)}>Close</Button>

@@ -1,5 +1,5 @@
 {
-  "name": "SignFlow - Document Signature Platform",
-  "description": "An application to upload, prepare, and send documents for electronic signature. Users can add signature fields, text, dates, and more to PDFs, then send them to recipients to be signed.",
+  "name": "DocuSeal - Document Signature Platform",
+  "description": "A feature-rich platform to upload, prepare, send, and track documents for electronic signatures. Users can add a variety of fields, manage recipients, and customize branding.",
   "requestFramePermissions": []
 }

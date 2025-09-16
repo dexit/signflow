@@ -7,8 +7,7 @@ interface SignaturePadProps {
 }
 
 const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, onClose }) => {
-  const [mode, setMode] = useState<'draw' | 'type' | 'upload'>('draw');
-  const [typedText, setTypedText] = useState('');
+  const [mode, setMode] = useState<'draw' | 'upload'>('draw');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -62,24 +61,6 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, onClose }) => {
     ctx.closePath();
     setIsDrawing(false);
   };
-  
-  const drawTypedSignature = useCallback(() => {
-    const canvas = canvasRef.current;
-    const ctx = getCtx();
-    if (!canvas || !ctx) return;
-    clearCanvas();
-    ctx.fillStyle = '#000000';
-    ctx.font = '50px "Homemade Apple", cursive';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(typedText, canvas.width / 2, canvas.height / 2);
-  }, [typedText, clearCanvas]);
-
-  useEffect(() => {
-    if (mode === 'type') {
-        drawTypedSignature();
-    }
-  }, [typedText, mode, drawTypedSignature]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -92,7 +73,6 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, onClose }) => {
           const ctx = getCtx();
           if (!canvas || !ctx) return;
           clearCanvas();
-          // Scale image to fit canvas while maintaining aspect ratio
           const hRatio = canvas.width / img.width;
           const vRatio = canvas.height / img.height;
           const ratio = Math.min(hRatio, vRatio, 1);
@@ -110,21 +90,15 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, onClose }) => {
   const handleSave = () => {
     const canvas = canvasRef.current;
     if (canvas) {
-      if (mode === 'type' && !typedText) {
-          alert("Please type your name.");
-          return;
-      }
       onSave(canvas.toDataURL('image/png'));
     }
   };
 
   return (
     <div>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Homemade+Apple&display=swap');`}</style>
       <Tabs defaultValue="draw" onValueChange={(val) => setMode(val as any)}>
         <TabsList>
           <TabsTrigger value="draw">Draw</TabsTrigger>
-          <TabsTrigger value="type">Type</TabsTrigger>
           <TabsTrigger value="upload">Upload</TabsTrigger>
         </TabsList>
         <TabsContent value="draw">
@@ -139,43 +113,29 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, onClose }) => {
             onMouseLeave={stopDrawing}
           />
         </TabsContent>
-        <TabsContent value="type">
-          <div className="relative mt-2">
-            <input 
-              type="text"
-              value={typedText}
-              onChange={(e) => setTypedText(e.target.value)}
-              placeholder="Type your name"
-              className="w-full text-center p-4 border border-input rounded-md text-3xl h-[200px]"
-              style={{ fontFamily: '"Homemade Apple", cursive' }}
-            />
-            <canvas ref={canvasRef} width={450} height={200} className="hidden" />
-          </div>
-        </TabsContent>
         <TabsContent value="upload">
             <div 
-                className="mt-2 w-[450px] h-[200px] border-2 border-dashed border-gray-300 rounded-md flex flex-col items-center justify-center text-center cursor-pointer hover:bg-gray-50"
+                className="mt-2 w-[450px] h-[200px] border-2 border-dashed border-slate-300 rounded-md flex flex-col items-center justify-center text-center cursor-pointer hover:bg-slate-50"
                 onClick={() => uploadInputRef.current?.click()}
             >
-                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500 mb-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-                <p className="text-sm text-gray-600">Click to upload an image</p>
-                <p className="text-xs text-gray-500">PNG, JPG, GIF</p>
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500 mb-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                <p className="text-sm text-slate-600">Click to upload an image</p>
+                <p className="text-xs text-slate-500">PNG, JPG, GIF</p>
             </div>
           <input type="file" ref={uploadInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
           <canvas ref={canvasRef} width={450} height={200} className="hidden" />
         </TabsContent>
       </Tabs>
-      <div className="mt-6 flex justify-between items-center">
+      <div className="mt-6 flex justify-end items-center space-x-3">
         <Button variant="secondary" onClick={onClose}>
             Cancel
         </Button>
-        <Button onClick={handleSave}>
-            Adopt & Sign
+        <Button variant="primary" onClick={handleSave}>
+            Save
         </Button>
       </div>
     </div>
   );
 };
 
-// Fix: Add a default export to make the component available for import.
 export default SignaturePad;

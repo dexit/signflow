@@ -1,6 +1,5 @@
-
 import React, { createContext, useState, useMemo, useCallback, useEffect } from 'react';
-import { Document, Recipient } from '../types';
+import { Document, Recipient, UserProfile, UserSettings } from '../types';
 
 interface AppContextType {
   isAuthenticated: boolean;
@@ -11,7 +10,27 @@ interface AppContextType {
   updateDocument: (doc: Document) => void;
   getDocument: (id: string) => Document | undefined;
   getDocumentByShareId: (shareId: string) => { doc: Document; permission: 'view' | 'edit' } | undefined;
+  userProfile: UserProfile;
+  updateUserProfile: (profile: Partial<UserProfile>) => void;
+  updateSettings: (settings: Partial<UserSettings>) => void;
 }
+
+const defaultSettings: UserSettings = {
+    personalization: {
+        signatureRequestEmail: { subject: '', body: '' },
+        documentsCopyEmail: { subject: '', body: '' },
+        completedNotificationEmail: { subject: '', body: '' },
+        companyLogo: null,
+        completedFormMessage: '',
+        redirectUrl: '',
+        showConfetti: false,
+    },
+    email: {
+        smtpHost: '', smtpPort: '', smtpUsername: '', smtpPassword: '',
+        smtpDomain: '', smtpAuth: 'plain', smtpSecurity: 'tls', sendFromEmail: ''
+    },
+    storage: { provider: 'disk' },
+};
 
 export const AppContext = createContext<AppContextType>({
   isAuthenticated: false,
@@ -22,6 +41,9 @@ export const AppContext = createContext<AppContextType>({
   updateDocument: () => {},
   getDocument: () => undefined,
   getDocumentByShareId: () => undefined,
+  userProfile: { settings: defaultSettings },
+  updateUserProfile: () => {},
+  updateSettings: () => {},
 });
 
 const getInitialState = <T,>(key: string, defaultValue: T): T => {
@@ -39,6 +61,7 @@ const getInitialState = <T,>(key: string, defaultValue: T): T => {
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => getInitialState('isAuthenticated', false));
   const [documents, setDocuments] = useState<Document[]>(() => getInitialState('documents', []));
+  const [userProfile, setUserProfile] = useState<UserProfile>(() => getInitialState('userProfile', { settings: defaultSettings }));
 
   useEffect(() => {
     localStorage.setItem('isAuthenticated', JSON.stringify(isAuthenticated));
@@ -47,6 +70,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem('documents', JSON.stringify(documents));
   }, [documents]);
+
+  useEffect(() => {
+    localStorage.setItem('userProfile', JSON.stringify(userProfile));
+  }, [userProfile]);
 
   const login = useCallback(() => {
     setIsAuthenticated(true);
@@ -80,6 +107,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return undefined;
   }, [documents]);
 
+  const updateUserProfile = useCallback((profileUpdate: Partial<UserProfile>) => {
+    setUserProfile(prev => ({ ...prev, ...profileUpdate }));
+  }, []);
+
+  const updateSettings = useCallback((settingsUpdate: Partial<UserSettings>) => {
+    setUserProfile(prev => ({
+        ...prev,
+        settings: { ...prev.settings, ...settingsUpdate }
+    }));
+  }, []);
+
   const contextValue = useMemo(
     () => ({
       isAuthenticated,
@@ -90,8 +128,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateDocument,
       getDocument,
       getDocumentByShareId,
+      userProfile,
+      updateUserProfile,
+      updateSettings,
     }),
-    [isAuthenticated, login, logout, documents, addDocument, updateDocument, getDocument, getDocumentByShareId]
+    [isAuthenticated, login, logout, documents, addDocument, updateDocument, getDocument, getDocumentByShareId, userProfile, updateUserProfile, updateSettings]
   );
 
   return <AppContext.Provider value={contextValue}>{children}</AppContext.Provider>;

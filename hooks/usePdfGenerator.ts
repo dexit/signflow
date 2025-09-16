@@ -1,9 +1,9 @@
 import { useState } from 'react';
-// Fix: Import DocumentStatus to use its enum values for type safety.
 import { Document, FieldType, DocumentStatus } from '../types';
 import { PDFDocument, rgb, StandardFonts, PDFFont } from 'pdf-lib';
 
 async function sha256(str: string): Promise<string> {
+    if(!str) return Promise.resolve('');
     const buffer = new TextEncoder().encode(str);
     const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
@@ -15,19 +15,18 @@ async function embedFont(pdfDoc: PDFDocument): Promise<PDFFont> {
     try {
         return await pdfDoc.embedFont(StandardFonts.Helvetica);
     } catch {
-        // Fallback for environments where standard fonts might not be available.
         const fontBytes = await fetch('https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/PDFFont/Helvetica.afm').then(res => res.arrayBuffer());
         return await pdfDoc.embedFont(fontBytes);
     }
 }
 
-const addCertificatePage = async (pdfDoc: PDFDocument, doc: Document, font: PDFFont, documentHash: string) => {
+const addCertificatePage = async (pdfDoc: PDFDocument, doc: Document, font: PDFFont, courierFont: PDFFont, documentHash: string) => {
     const page = pdfDoc.addPage();
     const { width, height } = page.getSize();
     const margin = 50;
-    const lightGray = rgb(0.3, 0.3, 0.3);
-    const black = rgb(0, 0, 0);
-    const headerBlue = rgb(0.01, 0.1, 0.25);
+    const lightGray = rgb(0.33, 0.4, 0.51); // slate-600
+    const black = rgb(0.06, 0.09, 0.15); // slate-900
+    const headerBlue = rgb(0.24, 0.21, 0.65); // primary-700
     
     let yPosition = height - margin;
 
@@ -52,7 +51,7 @@ const addCertificatePage = async (pdfDoc: PDFDocument, doc: Document, font: PDFF
     yPosition -= 15;
     page.drawText(`ID: ${doc.id}`, { x: margin, y: yPosition, font, size: 10 });
     yPosition -= 15;
-    page.drawText(`Document Hash (SHA-256): ${documentHash}`, { x: margin, y: yPosition, font, size: 10 });
+    page.drawText(`Document Hash (SHA-256): ${documentHash}`, { x: margin, y: yPosition, font: courierFont, size: 10 });
 
     yPosition -= 30;
     page.drawLine({ start: { x: margin, y: yPosition }, end: { x: width - margin, y: yPosition }, thickness: 0.5, color: rgb(0.8, 0.8, 0.8) });
@@ -60,9 +59,12 @@ const addCertificatePage = async (pdfDoc: PDFDocument, doc: Document, font: PDFF
 
     page.drawText('Signer Summary', { x: margin, y: yPosition, font, size: 16, color: black });
     yPosition -= 25;
+    
+    const signerAuditHashes: string[] = [];
 
     for (const recipient of doc.recipients) {
         if (recipient.status !== 'Signed' || !recipient.signedAt) continue;
+        if(recipient.auditHash) signerAuditHashes.push(recipient.auditHash);
 
         page.drawText(`${recipient.name} (${recipient.email})`, { x: margin, y: yPosition, font, size: 12, color: black });
         yPosition -= 18;
@@ -70,11 +72,21 @@ const addCertificatePage = async (pdfDoc: PDFDocument, doc: Document, font: PDFF
         yPosition -= 15;
         page.drawText(`IP Address: ${recipient.ipAddress}`, { x: margin + 10, y: yPosition, font, size: 9, color: lightGray });
         yPosition -= 15;
-        page.drawText(`Signature Hash: ${recipient.signatureHash}`, { x: margin + 10, y: yPosition, font, size: 9, color: lightGray });
+        page.drawText(`Signature Hash: ${recipient.signatureHash}`, { x: margin + 10, y: yPosition, font: courierFont, size: 9, color: lightGray });
         yPosition -= 15;
-        page.drawText(`Audit Hash: ${recipient.auditHash}`, { x: margin + 10, y: yPosition, font, size: 9, color: lightGray });
+        page.drawText(`Audit Hash: ${recipient.auditHash}`, { x: margin + 10, y: yPosition, font: courierFont, size: 9, color: lightGray });
 
-        yPosition -= 30; // Space for next signer
+        yPosition -= 30;
+    }
+
+    const certificateHash = await sha256(signerAuditHashes.sort().join(''));
+    if (certificateHash) {
+        yPosition -= 10;
+        page.drawLine({ start: { x: margin, y: yPosition }, end: { x: width - margin, y: yPosition }, thickness: 0.5, color: rgb(0.8, 0.8, 0.8) });
+        yPosition -= 20;
+        page.drawText('Certificate Hash (SHA-256):', { x: margin, y: yPosition, font, size: 10, color: black });
+        yPosition -= 15;
+        page.drawText(certificateHash, { x: margin, y: yPosition, font: courierFont, size: 10, color: lightGray });
     }
 };
 
@@ -93,6 +105,7 @@ export const usePdfGenerator = () => {
             const documentHash = await sha256(doc.file);
             const pdfDoc = await PDFDocument.load(existingPdfBytes);
             const font = await embedFont(pdfDoc);
+            const courierFont = await pdfDoc.embedFont(StandardFonts.Courier);
             const pages = pdfDoc.getPages();
 
             for (const field of doc.fields) {
@@ -125,7 +138,7 @@ export const usePdfGenerator = () => {
                             const text = `Signed on ${date.toLocaleDateString()} at ${date.toLocaleTimeString()}`;
                              page.drawText(text, {
                                 x: pdfX,
-                                y: pdfY - 12, // Position text below signature
+                                y: pdfY - 12,
                                 size: 8,
                                 font,
                                 color: rgb(0.2, 0.2, 0.2),
@@ -158,7 +171,7 @@ export const usePdfGenerator = () => {
             }
 
             if (doc.status === DocumentStatus.COMPLETED) {
-                await addCertificatePage(pdfDoc, doc, font, documentHash);
+                await addCertificatePage(pdfDoc, doc, font, courierFont, documentHash);
             }
             
             const pdfBytes = await pdfDoc.save();

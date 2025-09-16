@@ -10,6 +10,7 @@ import SigningPage from './pages/SigningPage';
 import UploadPage from './pages/UploadPage';
 import Sidebar from './components/Sidebar';
 import SharedDocumentPage from './pages/SharedDocumentPage';
+import SettingsPage from './pages/SettingsPage';
 
 const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { isAuthenticated } = useContext(AppContext);
@@ -19,18 +20,13 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         return <Navigate to="/" replace />;
     }
     
-    // Editor page has a custom layout structure
-    if (location.pathname.startsWith('/editor')) {
-       return (
-         <div className="flex h-screen bg-gray-100">
-            <Sidebar />
-            {children}
-        </div>
-       )
+    // Editor page and Settings page have custom layouts
+    if (location.pathname.startsWith('/editor') || location.pathname.startsWith('/settings')) {
+       return <>{children}</>;
     }
 
     return (
-        <div className="flex h-screen bg-slate-50 text-foreground">
+        <div className="flex h-screen bg-slate-100 text-foreground">
             <Sidebar />
             <div className="flex-1 flex flex-col overflow-hidden">
                 <main className="flex-1 overflow-x-hidden overflow-y-auto">
@@ -57,7 +53,8 @@ function App() {
             <Route path="/dashboard" element={<AppLayout><DashboardPage /></AppLayout>} />
             <Route path="/upload" element={<AppLayout><UploadPage /></AppLayout>} />
             <Route path="/documents" element={<AppLayout><DashboardPage /></AppLayout>} />
-            <Route path="/editor/:documentId" element={<AppLayout><EditorPage /></AppLayout>} />
+            <Route path="/editor/:documentId" element={<EditorPage />} />
+            <Route path="/settings/*" element={<SettingsPage />} />
 
             {/* Redirect root of authenticated app to dashboard */}
             <Route path="*" element={<Navigate to="/dashboard" />} />

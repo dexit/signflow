@@ -1,10 +1,16 @@
 export enum FieldType {
   SIGNATURE = 'SIGNATURE',
   INITIALS = 'INITIALS',
+  TEXT = 'TEXT',
   NAME = 'NAME',
   DATE = 'DATE',
-  TEXT = 'TEXT',
   CHECKBOX = 'CHECKBOX',
+  NUMBER = 'NUMBER',
+  IMAGE = 'IMAGE',
+  FILE = 'FILE',
+  RADIO = 'RADIO',
+  SELECT = 'SELECT',
+  STAMP = 'STAMP',
 }
 
 export interface DocumentField {
@@ -26,7 +32,8 @@ export interface Recipient {
   id:string;
   name: string;
   email: string;
-  status: 'Pending' | 'Opened' | 'Signed';
+  phone?: string;
+  status: 'Pending' | 'Opened' | 'Signed' | 'Awaiting';
   signingUrl?: string;
   openedAt?: string;
   signedAt?: string;
@@ -57,4 +64,35 @@ export interface Document {
     width: number;
     height: number;
   }[];
+}
+
+export interface UserSettings {
+  personalization: {
+    signatureRequestEmail: { subject: string; body: string; };
+    documentsCopyEmail: { subject: string; body: string; };
+    completedNotificationEmail: { subject: string; body: string; };
+    companyLogo: string | null;
+    completedFormMessage: string;
+    redirectUrl: string;
+    showConfetti: boolean;
+  };
+  email: {
+    smtpHost: string;
+    smtpPort: string;
+    smtpUsername: string;
+    smtpPassword: string;
+    smtpDomain: string;
+    smtpAuth: string;
+    smtpSecurity: string;
+    sendFromEmail: string;
+  };
+  storage: {
+    provider: 'disk' | 'aws' | 'gcp' | 'azure';
+  };
+}
+
+export interface UserProfile {
+  signature?: string;
+  initials?: string;
+  settings: UserSettings;
 }

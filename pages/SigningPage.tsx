@@ -1,12 +1,10 @@
 import React, { useContext, useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AppContext } from '../context/AppContext';
-// Fix: Import DocumentStatus to use its enum values for type safety.
 import { Document, DocumentField, FieldType, DocumentStatus } from '../types';
 import { Button, Modal, Spinner } from '../components/ui';
 import SignaturePad from '../components/SignaturePad';
 
-// Helper function to compute SHA-256 hash
 async function sha256(str: string): Promise<string> {
     const buffer = new TextEncoder().encode(str);
     const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
@@ -33,7 +31,6 @@ const SigningPage: React.FC = () => {
     const foundDoc = getDocument(documentId);
     if (foundDoc) {
       setDoc(foundDoc);
-      // Pre-fill fields
       const initialValues: Record<string, string> = {};
       const recipient = foundDoc.recipients.find(r => r.id === recipientId);
       foundDoc.fields.forEach(field => {
@@ -47,13 +44,10 @@ const SigningPage: React.FC = () => {
       });
       setFieldValues(initialValues);
 
-    } else {
-      // Handle document not found
     }
   }, [documentId, recipientId, getDocument]);
 
   useEffect(() => {
-    // Track when a recipient opens the document
     if (doc) {
       const recipient = doc.recipients.find(r => r.id === recipientId);
       if (recipient && recipient.status === 'Pending') {
@@ -63,7 +57,7 @@ const SigningPage: React.FC = () => {
         );
         const updatedDoc = { ...doc, recipients: updatedRecipients };
         updateDocument(updatedDoc);
-        setDoc(updatedDoc); // Update local state as well
+        setDoc(updatedDoc);
       }
     }
   }, [doc, recipientId, updateDocument]);
@@ -176,16 +170,16 @@ const SigningPage: React.FC = () => {
   };
 
   if (loading || !doc) {
-    return <div className="flex justify-center items-center h-screen"><Spinner size="lg" /><p className="ml-4 text-gray-600">Loading Document...</p></div>;
+    return <div className="flex justify-center items-center h-screen"><Spinner size="lg" /><p className="ml-4 text-slate-600">Loading Document...</p></div>;
   }
   
   const recipient = doc.recipients.find(r => r.id === recipientId);
   if (!recipient) return <p>Invalid recipient.</p>;
   if (recipient.status === 'Signed') {
     return (
-        <div className="text-center py-20">
-            <h1 className="text-2xl font-bold">Document Already Signed</h1>
-            <p className="text-gray-600 mt-2">You have already completed signing this document.</p>
+        <div className="text-center py-20 bg-slate-100 min-h-screen">
+            <h1 className="text-2xl font-bold text-slate-800">Document Already Signed</h1>
+            <p className="text-slate-600 mt-2">You have already completed signing this document.</p>
         </div>
     );
   }
@@ -196,22 +190,21 @@ const SigningPage: React.FC = () => {
   };
 
   return (
-    <div className="bg-gray-100 min-h-screen">
+    <div className="bg-slate-200 min-h-screen">
       <div className="sticky top-0 bg-white shadow-md z-10 p-4 flex justify-between items-center">
-        <h1 className="text-xl font-bold">{doc.name}</h1>
+        <h1 className="text-xl font-bold text-slate-800">{doc.name}</h1>
         <Button onClick={handleSubmit}>Finish Signing</Button>
       </div>
       <div className="p-8">
         <div className="max-w-4xl mx-auto">
           {pdfPages.map((pageData, index) => (
-            <div key={index} className="relative shadow-lg mb-8">
-              {/* Fix: Replaced undefined variable 'pageNumber' with 'index' from map. */}
+            <div key={index} className="relative shadow-lg mb-8 bg-white">
               <img src={pageData} alt={`Page ${index + 1}`} className="w-full h-auto" />
               {doc.fields.filter(f => f.page === index && f.recipientId === recipientId).map(field => {
                  const value = fieldValues[field.id];
                  const isFilled = !!value;
-                 const baseClass = "absolute bg-yellow-100 bg-opacity-70 border-2 border-dashed border-yellow-500 rounded";
-                 const filledClass = "border-green-500 bg-green-100";
+                 const baseClass = "absolute bg-primary-100 bg-opacity-60 border-2 border-dashed border-primary-400 rounded focus-within:ring-2 focus-within:ring-primary-500";
+                 const filledClass = "border-solid border-emerald-500 bg-emerald-100";
 
                  return (
                     <div
@@ -221,7 +214,7 @@ const SigningPage: React.FC = () => {
                     >
                     {[FieldType.SIGNATURE, FieldType.INITIALS].includes(field.type) ? (
                         <button onClick={() => openSignatureModal(field)} className="w-full h-full flex items-center justify-center">
-                            {value ? <img src={value} alt="signature" className="w-full h-full object-contain"/> : <span className="text-yellow-700 text-sm">Click to sign</span>}
+                            {value ? <img src={value} alt="signature" className="w-full h-full object-contain"/> : <span className="text-primary-800 font-semibold text-sm">Click to Sign</span>}
                         </button>
                     ) : field.type === FieldType.CHECKBOX ? (
                          <div className="w-full h-full flex items-center justify-center">
@@ -238,7 +231,7 @@ const SigningPage: React.FC = () => {
                             value={value || ''}
                             onChange={(e) => handleFieldValueChange(field.id, e.target.value)}
                             readOnly={field.type === FieldType.DATE || field.type === FieldType.NAME}
-                            className="w-full h-full bg-transparent p-1 text-sm focus:outline-none"
+                            className="w-full h-full bg-transparent p-1 text-sm focus:outline-none text-slate-900"
                         />
                     )}
                     </div>

@@ -43,9 +43,10 @@ const EmailSettings: React.FC = () => {
                     <TabsTrigger value="webhook">Webhook</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="smtp" className="space-y-4">
+                {/* Fix: Removed className from TabsContent and wrapped content in a div with the class. */}
+                <TabsContent value="smtp">
                     {settings.provider === 'smtp' && (
-                        <>
+                        <div className="space-y-4">
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <Input label="Host" id="host" placeholder="smtp.example.com" value={settings.smtpHost} onChange={e => handleChange('smtpHost', e.target.value)} />
                             <Input label="Port" id="port" placeholder="587" value={settings.smtpPort} onChange={e => handleChange('smtpPort', e.target.value)} />
@@ -74,21 +75,25 @@ const EmailSettings: React.FC = () => {
                             </div>
                           </div>
                           <Input label="Send from Email" id="from-email" placeholder="no-reply@example.com" value={settings.sendFromEmail} onChange={e => handleChange('sendFromEmail', e.target.value)} />
-                        </>
+                        </div>
                     )}
                 </TabsContent>
-                <TabsContent value="msGraph" className="space-y-4">
+                {/* Fix: Removed className from TabsContent and wrapped content in a div with the class. */}
+                <TabsContent value="msGraph">
                      {settings.provider === 'msGraph' && (
-                        <>
+                        <div className="space-y-4">
                           <Input label="Client ID" value={settings.clientId} onChange={e => handleChange('clientId', e.target.value)} />
                           <Input label="Tenant ID" value={settings.tenantId} onChange={e => handleChange('tenantId', e.target.value)} />
                           <Input label="Client Secret" type="password" value={settings.clientSecret} onChange={e => handleChange('clientSecret', e.target.value)} />
-                        </>
+                        </div>
                     )}
                 </TabsContent>
-                 <TabsContent value="webhook" className="space-y-4">
+                 {/* Fix: Removed className from TabsContent and wrapped content in a div with the class. */}
+                 <TabsContent value="webhook">
                      {settings.provider === 'webhook' && (
-                        <Input label="Webhook URL" placeholder="https://your-endpoint.com/email-hook" value={settings.url} onChange={e => handleChange('url', e.target.value)} />
+                        <div className="space-y-4">
+                            <Input label="Webhook URL" placeholder="https://your-endpoint.com/email-hook" value={settings.url} onChange={e => handleChange('url', e.target.value)} />
+                        </div>
                     )}
                 </TabsContent>
             </Tabs>

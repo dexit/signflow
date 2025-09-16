@@ -5,7 +5,7 @@ import { AppContext } from '../context/AppContext';
 import { Document, FieldType, DocumentField, Recipient, DocumentStatus, Event } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { Button, Modal, Input, Spinner, Tooltip, Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui';
-import { usePdfGenerator } from '../hooks/usePdfGenerator';
+import { useFieldDetector } from '../hooks/useFieldDetector';
 // Fix: Import Sidebar component to resolve 'Cannot find name' error.
 import Sidebar from '../components/Sidebar';
 
@@ -278,7 +278,7 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
             ${isRightSidebarOpen ? 'translate-x-0' : 'translate-x-full'}
             absolute md:relative right-0 h-full md:translate-x-0 z-10`}>
             {(doc.status === DocumentStatus.DRAFT && !isReadOnly) ? (
-              <DraftSidebar doc={doc} setDoc={setDoc} selectedRecipientId={selectedRecipientId} setSelectedRecipientId={setSelectedRecipientId} logEvent={logEvent} />
+              <DraftSidebar doc={doc} setDoc={setDoc} selectedRecipientId={selectedRecipientId} setSelectedRecipientId={setSelectedRecipientId} logEvent={logEvent} pdfPages={pdfPages} />
             ) : (
               <SubmissionsSidebar doc={doc} />
             )}
@@ -298,9 +298,33 @@ const DraftSidebar: React.FC<{
   selectedRecipientId: string;
   setSelectedRecipientId: (id: string) => void;
   logEvent: (id: string, type: any, msg: string) => void;
-}> = ({ doc, setDoc, selectedRecipientId, setSelectedRecipientId, logEvent }) => {
+  pdfPages: string[];
+}> = ({ doc, setDoc, selectedRecipientId, setSelectedRecipientId, logEvent, pdfPages }) => {
   const [isRecipientModalOpen, setRecipientModalOpen] = useState(false);
+  const [isNoRecipientAlertOpen, setNoRecipientAlertOpen] = useState(false);
   const selectedRecipient = doc.recipients.find(r => r.id === selectedRecipientId);
+  const { isDetecting, detectFields } = useFieldDetector();
+
+  const handleAutoDetect = async () => {
+    if (doc.recipients.length === 0) {
+      setNoRecipientAlertOpen(true);
+      return;
+    }
+
+    const detected = await detectFields(pdfPages);
+    if (detected && detected.length > 0) {
+      const recipientToAssign = selectedRecipientId || doc.recipients[0].id;
+      const newFields: DocumentField[] = detected.map(f => ({
+        ...f,
+        id: uuidv4(),
+        recipientId: recipientToAssign,
+      }));
+      setDoc({ ...doc, fields: [...doc.fields, ...newFields] });
+      logEvent(doc.id, 'document.edited' as any, `Auto-detected and added ${newFields.length} fields.`);
+    } else if (detected) {
+        alert("No fields were detected in the document.");
+    }
+  };
 
   return (
     <div>
@@ -342,13 +366,27 @@ const DraftSidebar: React.FC<{
       
       <hr className="my-6"/>
       
-      <h3 className="font-bold text-lg mb-2">Fields</h3>
+      <div className="flex justify-between items-center mb-2">
+        <h3 className="font-bold text-lg">Fields</h3>
+        <Button variant="secondary" size="sm" onClick={handleAutoDetect} disabled={isDetecting}>
+          {isDetecting ? <Spinner size="sm"/> : 
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M9.5 2.5a1.5 1.5 0 0 1 3 0"/><path d="M6.02 5.21a1.5 1.5 0 0 1 2.1 0l.98.98a1.5 1.5 0 0 1 0 2.12l-6.2 6.2a1.5 1.5 0 0 1-2.12 0l-.98-.98a1.5 1.5 0 0 1 0-2.12L6.02 5.2Z"/><path d="m15.5 6.5 3 3"/><path d="M12.5 9.5 9.5 6.5"/><path d="m6.5 12.5 3 3"/><path d="m3.5 15.5 3 3"/><path d="M18 11.5a1.5 1.5 0 0 1 3 0"/><path d="M21.5 14.5a1.5 1.5 0 0 1 0 3"/><path d="M18.5 21.5a1.5 1.5 0 0 1-3 0"/></svg>
+          }
+          {isDetecting ? 'Detecting...' : 'Auto-detect'}
+        </Button>
+      </div>
       <p className="text-sm text-slate-500 mb-4">For <span className="font-bold text-primary-700">{selectedRecipient?.name || '...'}</span></p>
       <div className="grid grid-cols-2 gap-2">
           {Object.values(FieldType).map(type => (
               <DraggableField key={type} type={type} disabled={!selectedRecipientId} />
           ))}
       </div>
+      <Modal isOpen={isNoRecipientAlertOpen} onClose={() => setNoRecipientAlertOpen(false)} title="Add a Recipient" size="md">
+        <p>Please add at least one recipient before auto-detecting fields.</p>
+        <div className="mt-6 flex justify-end">
+            <Button onClick={() => setNoRecipientAlertOpen(false)}>OK</Button>
+        </div>
+      </Modal>
     </div>
   );
 };

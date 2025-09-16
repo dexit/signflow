@@ -39,19 +39,23 @@ const SmsSettings: React.FC = () => {
                     <TabsTrigger value="webhook">Webhook</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="twilio" className="space-y-4">
+                {/* Fix: Removed className from TabsContent and wrapped content in a div with the class. */}
+                <TabsContent value="twilio">
                     {settings.provider === 'twilio' && (
-                        <>
+                        <div className="space-y-4">
                           <Input label="Account SID" value={settings.accountSid} onChange={e => handleChange('accountSid', e.target.value)} />
                           <Input label="Auth Token" type="password" value={settings.authToken} onChange={e => handleChange('authToken', e.target.value)} />
                           <Input label="Twilio Phone Number" placeholder="+15017122661" value={settings.twilioPhoneNumber} onChange={e => handleChange('twilioPhoneNumber', e.target.value)} />
-                        </>
+                        </div>
                     )}
                 </TabsContent>
                 
-                 <TabsContent value="webhook" className="space-y-4">
+                 {/* Fix: Removed className from TabsContent and wrapped content in a div with the class. */}
+                 <TabsContent value="webhook">
                      {settings.provider === 'webhook' && (
-                        <Input label="Webhook URL" placeholder="https://your-endpoint.com/sms-hook" value={settings.url} onChange={e => handleChange('url', e.target.value)} />
+                        <div className="space-y-4">
+                            <Input label="Webhook URL" placeholder="https://your-endpoint.com/sms-hook" value={settings.url} onChange={e => handleChange('url', e.target.value)} />
+                        </div>
                     )}
                 </TabsContent>
             </Tabs>

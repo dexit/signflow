@@ -7,6 +7,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { Button, Modal, Input, Spinner, Tooltip, Tabs, TabsList, TabsTrigger, TabsContent, Card, CardContent } from '../components/ui';
 import { useFieldDetector } from '../hooks/useFieldDetector';
 import { useDocumentHistory } from '../hooks/useDocumentHistory';
+import * as pdfjsLib from 'pdfjs-dist/build/pdf.mjs';
+
+// Set worker source once at the module level.
+// This is the most robust way to ensure version consistency.
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://aistudiocdn.com/pdfjs-dist@4.3.136/build/pdf.worker.mjs';
 
 const ItemTypes = {
   FIELD: 'field',
@@ -59,35 +64,30 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
     const navigate = useNavigate();
     const { getDocument, updateDocument, userProfile, logEvent } = useContext(AppContext);
     
-    // FIX: Immediately find the document. This prevents hooks from running with `undefined`.
     const initialDoc = documentId ? getDocument(documentId) : undefined;
 
-    // FIX: Redirect if the document doesn't exist.
-    useEffect(() => {
-        if (!initialDoc) {
-            navigate('/dashboard');
-        }
-    }, [initialDoc, navigate]);
-    
-    // FIX: If the document is not found, render a loading state to prevent the rest of the component from executing.
-    if (!initialDoc) {
-      return (
-        <div className="flex h-screen w-screen bg-slate-50 justify-center items-center">
-            <Spinner size="lg" /><p className="ml-4 text-slate-600 text-lg">Loading Document...</p>
-        </div>
-      );
-    }
-
     const { doc, setDoc, undo, redo, canUndo, canRedo } = useDocumentHistory(initialDoc);
-    
     const [pdfPages, setPdfPages] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
     const [pdfError, setPdfError] = useState<string | null>(null);
     const [selectedRecipientId, setSelectedRecipientId] = useState<string>('');
     const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
     const [isSendModalOpen, setSendModalOpen] = useState(false);
-    
     const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+    useEffect(() => {
+        if (!initialDoc) {
+            navigate('/dashboard');
+        }
+    }, [initialDoc, navigate]);
+    
+    if (!doc) {
+      return (
+        <div className="flex h-screen w-screen bg-slate-50 justify-center items-center">
+            <Spinner size="lg" /><p className="ml-4 text-slate-600 text-lg">Loading Document...</p>
+        </div>
+      );
+    }
 
     useEffect(() => {
         if(doc.recipients.length > 0 && !selectedRecipientId){
@@ -117,10 +117,10 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
       setLoading(true);
       setPdfError(null);
       try {
-        const pdfJS = await import('pdfjs-dist/build/pdf.min.mjs');
-        pdfJS.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfJS.version}/build/pdf.worker.min.mjs`;
+        console.log('Using statically imported pdf.js library.');
 
-        const pdf = await pdfJS.getDocument(fileData).promise;
+        const pdf = await pdfjsLib.getDocument(fileData).promise;
+        console.log(`PDF loaded with ${pdf.numPages} pages.`);
         const pages: string[] = [];
         const pageDimensions: { width: number, height: number }[] = [];
         pageRefs.current = [...Array(pdf.numPages)];
@@ -143,9 +143,10 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
         if(doc && !doc.pageDimensions) {
             setDoc({ ...doc, pageDimensions });
         }
+        console.log('PDF rendering complete.');
       } catch (error) {
-          console.error("Failed to render PDF:", error);
-          setPdfError("This PDF could not be loaded. It may be corrupted or in an unsupported format.");
+          console.error("Critical error while rendering PDF in EditorPage:", error);
+          setPdfError("This PDF could not be loaded. It may be corrupted or in an unsupported format. Check the console for details.");
       } finally {
         setLoading(false);
       }
@@ -315,6 +316,7 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
               {pdfPages.map((pageData, index) => (
                   <PdfPage 
                       key={index}
+                      doc={doc}
                       pageIndex={index}
                       pageData={pageData}
                       fields={doc.fields.filter(f => f.page === index)}
@@ -455,16 +457,24 @@ const RecipientsAndFieldsSidebar: React.FC<{
       <h3 className="font-bold text-lg mb-4">Placed Fields</h3>
       <div className="space-y-2">
         {doc.fields.filter(f => f.recipientId === selectedRecipientId).map(field => {
-// Fix: Correctly render the icon by looking it up in the FieldIcons object first.
-const IconComponent = FieldIcons[field.type];
-return (
-<div key={field.id} onClick={() => onSelectField(field.id)} className="p-2 border rounded-md cursor-pointer hover:bg-slate-50 flex items-center text-sm">
-<IconComponent className="w-4 h-4 mr-2 text-slate-500" />
-<span className="truncate flex-1">{field.label || field.type}</span>
-<span className="text-xs text-slate-400">Pg. {field.page + 1}</span>
-</div>
-);
-})}
+          const IconComponent = FieldIcons[field.type];
+          if (!IconComponent) {
+            return (
+              <div key={field.id} onClick={() => onSelectField(field.id)} className="p-2 border border-red-300 bg-red-50 rounded-md cursor-pointer hover:bg-red-100 flex items-center text-sm" title={`Error: Unknown field type '${field.type}'`}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 mr-2 text-red-500 flex-shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+                <span className="truncate flex-1 text-red-700 font-medium">Unknown Field</span>
+                <span className="text-xs text-slate-400">Pg. {field.page + 1}</span>
+              </div>
+            );
+          }
+          return (
+            <div key={field.id} onClick={() => onSelectField(field.id)} className="p-2 border rounded-md cursor-pointer hover:bg-slate-50 flex items-center text-sm">
+              <IconComponent className="w-4 h-4 mr-2 text-slate-500" />
+              <span className="truncate flex-1">{field.label || field.type}</span>
+              <span className="text-xs text-slate-400">Pg. {field.page + 1}</span>
+            </div>
+          );
+        })}
          {doc.fields.filter(f => f.recipientId === selectedRecipientId).length === 0 && (
             <p className="text-sm text-slate-500 text-center py-4">No fields for this recipient.</p>
          )}
@@ -567,68 +577,106 @@ const FieldPropertiesSidebar: React.FC<{
 };
 
 const SubmissionsSidebar: React.FC<{ doc: Document }> = ({ doc }) => {
+  // Group events by day for a more readable history
+  const groupedEvents = [...(doc.events || [])].reverse().reduce((acc, event) => {
+    const day = new Date(event.timestamp).toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+    if (!acc[day]) {
+      acc[day] = [];
+    }
+    acc[day].push(event);
+    return acc;
+  }, {} as Record<string, Event[]>);
+
   return (
-    <div className="p-2">
-    <Tabs defaultValue="submissions">
-      <TabsList className="grid w-full grid-cols-2">
-        <TabsTrigger value="submissions">Submissions</TabsTrigger>
-        <TabsTrigger value="history">History</TabsTrigger>
-      </TabsList>
-      <TabsContent value="submissions">
-         <div className="space-y-3">
-          {doc.recipients.map((r, index) => {
-            const color = getRecipientColor(index);
-             const getStatusPill = () => {
-                switch(r.status) {
-                    case 'Signed': return <span className="text-xs font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Completed</span>;
-                    case 'Opened': return <span className="text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">Opened</span>;
-                    default: return <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full">Sent</span>;
+    <div className="p-4">
+      <Tabs defaultValue="submissions">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="submissions">Submissions</TabsTrigger>
+          <TabsTrigger value="history">History</TabsTrigger>
+        </TabsList>
+        <TabsContent value="submissions" className="pt-2">
+          <div className="space-y-3">
+            {doc.recipients.map((r, index) => {
+              const color = getRecipientColor(index);
+              const getStatusPill = () => {
+                switch (r.status) {
+                  case 'Signed':
+                    return <span className="text-xs font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Completed</span>;
+                  case 'Opened':
+                    return <span className="text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">Opened</span>;
+                  default:
+                    return <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full">Sent</span>;
                 }
-            };
-            return (
-              <div key={r.id} className="bg-slate-50 p-3 rounded-md border border-slate-200">
-                <div className="flex justify-between items-center mb-2">
-                  <div className="flex items-center min-w-0">
+              };
+              return (
+                <div key={r.id} className="bg-slate-50 p-3 rounded-md border border-slate-200">
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="flex items-center min-w-0">
                       <span className={`w-3 h-3 rounded-full mr-3 flex-shrink-0 ${color.dot}`}></span>
                       <p className="font-semibold text-sm truncate text-slate-900">{r.name}</p>
+                    </div>
+                    {getStatusPill()}
                   </div>
-                  {getStatusPill()}
+                  <p className="text-xs text-slate-500 truncate">{r.email}</p>
                 </div>
-                <p className="text-xs text-slate-500 truncate">{r.email}</p>
-              </div>
-            )
-          })}
-        </div>
-      </TabsContent>
-      <TabsContent value="history">
-        <div className="space-y-4">
-            {[...doc.events].reverse().map(event => (
-                <div key={event.id} className="flex">
-                    <div className="w-8 flex-shrink-0 flex justify-center">
-                        <div className="w-px bg-slate-300 h-full"></div>
-                        <div className="absolute w-3 h-3 bg-slate-300 rounded-full mt-1"></div>
+              );
+            })}
+          </div>
+        </TabsContent>
+        <TabsContent value="history">
+            { (doc.events || []).length === 0 ? (
+                <p className="text-sm text-slate-500 text-center pt-8">No history for this document yet.</p>
+            ) : (
+                <div className="relative pl-6 pt-2 space-y-6">
+                    {Object.entries(groupedEvents).map(([day, eventsOnDay], dayIndex) => (
+                    <div key={day} className="relative">
+                        {/* Vertical line connecting the day markers */}
+                        {dayIndex > 0 && <div className="absolute left-2.5 -top-6 h-6 -translate-x-1/2 border-l-2 border-slate-200"></div>}
+
+                        {/* Day marker */}
+                        <div className="flex items-center">
+                            <div className="z-10 flex h-5 w-5 items-center justify-center rounded-full bg-slate-200">
+                                <div className="h-2.5 w-2.5 rounded-full bg-slate-400" />
+                            </div>
+                            <h4 className="ml-4 text-sm font-semibold text-slate-600">{day}</h4>
+                        </div>
+                        
+                        {/* Events for the day */}
+                        <div className="relative ml-[9px] border-l-2 border-slate-200 pl-8 pt-4 pb-2 space-y-4">
+                        {eventsOnDay.map((event) => (
+                            <div key={event.id}>
+                            <p className="text-sm font-medium text-slate-800">{event.message}</p>
+                            <p className="text-xs text-slate-500">
+                                {new Date(event.timestamp).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+                            </p>
+                            </div>
+                        ))}
+                        </div>
                     </div>
-                    <div className="pl-4 pb-4">
-                        <p className="text-sm font-medium text-slate-800">{event.message}</p>
-                        <p className="text-xs text-slate-500">{new Date(event.timestamp).toLocaleString()}</p>
-                    </div>
+                    ))}
                 </div>
-            ))}
-        </div>
-      </TabsContent>
-    </Tabs>
+            )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
 
 
 const PdfPage = React.forwardRef<HTMLDivElement, {
-    pageIndex: number, pageData: string, fields: DocumentField[],
+    doc: Document,
+    pageIndex: number, 
+    pageData: string, 
+    fields: DocumentField[],
     onFieldDrop: (item: { type: FieldType }, page: number, x: number, y: number) => void,
     onPlacedFieldMove: (field: DocumentField, deltaX: number, deltaY: number) => void,
     selectedFieldId: string | null,
     onSelectField: (id: string) => void,
-}>(({ pageIndex, pageData, fields, onFieldDrop, onPlacedFieldMove, selectedFieldId, onSelectField }, ref) => {
+}>(({ doc, pageIndex, pageData, fields, onFieldDrop, onPlacedFieldMove, selectedFieldId, onSelectField }, ref) => {
     
     const pageContainerRef = useRef<HTMLDivElement>(null);
     const [, drop] = useDrop(() => ({
@@ -652,6 +700,7 @@ const PdfPage = React.forwardRef<HTMLDivElement, {
                         <PlacedField 
                             key={field.id}
                             field={field}
+                            doc={doc}
                             onMove={onPlacedFieldMove}
                             onSelect={onSelectField}
                             isSelected={selectedFieldId === field.id}
@@ -666,14 +715,30 @@ const PdfPage = React.forwardRef<HTMLDivElement, {
 
 const PlacedField: React.FC<{
     field: DocumentField,
+    doc: Document,
     onMove: (field: DocumentField, deltaX: number, deltaY: number) => void,
     onSelect: (id: string) => void,
     isSelected: boolean,
-}> = ({ field, onMove, onSelect, isSelected }) => {
-    const { getDocument } = useContext(AppContext);
-    const doc = getDocument(useParams<{documentId: string}>().documentId!)!;
+}> = ({ field, doc, onMove, onSelect, isSelected }) => {
+    // FIX: Add a robust check for invalid field types to prevent app crashes from corrupted data.
+    if (!field.type || !Object.values(FieldType).includes(field.type)) {
+        return (
+             <div
+                style={{ left: field.x, top: field.y, width: field.width, height: field.height }}
+                className="absolute flex items-center justify-center p-1 border-2 border-dashed border-red-500 rounded-md bg-red-100 cursor-pointer"
+                onClick={(e) => { e.stopPropagation(); onSelect(field.id); }}
+            >
+                <div className="text-center text-red-700 select-none">
+                    <p className="text-xs font-bold">Error</p>
+                    <p className="text-[9px]">Invalid Field</p>
+                </div>
+            </div>
+        );
+    }
+
     const recipientIndex = doc.recipients.findIndex(r => r.id === field.recipientId);
     const color = getRecipientColor(recipientIndex);
+    const recipient = doc.recipients[recipientIndex];
 
     const [{ isDragging }, drag] = useDrag(() => ({
         type: ItemTypes.PLACED_FIELD,
@@ -700,7 +765,7 @@ const PlacedField: React.FC<{
         >
             <div className={`w-full h-full ${color.bg} opacity-50`}></div>
             <div className="absolute text-center select-none p-1">
-                <p className={`text-xs font-bold ${color.text} truncate`}>{field.label || getInitials(doc.recipients[recipientIndex]?.name || '??')}</p>
+                <p className={`text-xs font-bold ${color.text} truncate`}>{field.label || getInitials(recipient?.name || '??')}</p>
                 <p className={`text-[9px] ${color.text} capitalize`}>{field.type.toLowerCase()}</p>
             </div>
         </div>

@@ -92,17 +92,43 @@ const deepMerge = <T extends Record<string, any>>(target: T, source: Partial<T>)
 };
 
 
+// FIX: Replaced the previous implementation with a fully robust function to handle all forms of data corruption from localStorage.
 const getInitialState = <T,>(key: string, defaultValue: T): T => {
   try {
     const storedValue = localStorage.getItem(key);
     if (storedValue) {
       const parsed = JSON.parse(storedValue);
-      // Use deep merge only for objects to avoid corrupting arrays (like documents)
-      // and to correctly merge nested settings in userProfile.
-      if (isObject(defaultValue) && isObject(parsed)) {
-        return deepMerge(defaultValue as any, parsed as any);
+
+      // If default is an array, stored must be an array.
+      if (Array.isArray(defaultValue)) {
+        if (Array.isArray(parsed)) {
+          // FIX: Sanitize the array. Filter out any non-object/null values to prevent crashes from corrupted data within the array.
+          const sanitizedArray = parsed.filter(item => item && typeof item === 'object' && !Array.isArray(item));
+          if (sanitizedArray.length < parsed.length) {
+            console.warn(`Data for key "${key}" in localStorage contained corrupted entries which have been removed.`);
+          }
+          return sanitizedArray as T;
+        }
+        console.warn(`Data for key "${key}" in localStorage was corrupted (expected array). Falling back to default.`);
+        return defaultValue;
       }
-      return parsed; // Return arrays and primitives as is.
+
+      // If default is an object, stored must be an object.
+      if (isObject(defaultValue)) {
+        if (isObject(parsed)) {
+          // Use deep merge to ensure all keys from default exist, preventing crashes from missing nested properties.
+          return deepMerge(defaultValue as Record<string, any>, parsed as Record<string, any>) as T;
+        }
+        console.warn(`Data for key "${key}" in localStorage was corrupted (expected object, got ${typeof parsed}). Falling back to default.`);
+        return defaultValue;
+      }
+      
+      // For primitives, ensure the type is correct.
+      if (typeof parsed === typeof defaultValue) {
+         return parsed;
+      }
+      console.warn(`Data for key "${key}" in localStorage has mismatched type (expected ${typeof defaultValue}, got ${typeof parsed}). Falling back to default.`);
+      return defaultValue;
     }
   } catch (error) {
     console.error(`Error reading from localStorage key “${key}”:`, error);
@@ -144,11 +170,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
   
   const getDocument = useCallback((id: string) => {
+    // Ensure documents is an array before calling .find()
+    if (!Array.isArray(documents)) return undefined;
     return documents.find(doc => doc.id === id);
   }, [documents]);
   
   const logEvent = useCallback((documentId: string, type: Event['type'], message: string) => {
     setDocuments(prevDocs => {
+        if (!Array.isArray(prevDocs)) return [];
         return prevDocs.map(doc => {
             if (doc.id === documentId) {
                 const newEvent: Event = {
@@ -165,6 +194,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const getDocumentByShareId = useCallback((shareId: string) => {
+    if (!Array.isArray(documents)) return undefined;
     for (const doc of documents) {
         if (doc.shareSettings?.viewId === shareId) {
             return { doc, permission: 'view' as const };

@@ -71,7 +71,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, descriptio
             {description && <p className="text-sm text-slate-500 mt-1">{description}</p>}
           </div>
           <button type="button" onClick={onClose} className="text-slate-400 bg-transparent hover:bg-slate-200 hover:text-slate-900 rounded-lg text-sm p-1.5 ml-auto inline-flex items-center">
-             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
         </div>
         <div className="p-6 text-slate-800">{children}</div>
@@ -126,9 +126,10 @@ export const TabsTrigger: React.FC<{ value: string; children: ReactNode; }> = ({
     </button>
   );
 };
-export const TabsContent: React.FC<{ value: string; children: ReactNode; }> = ({ value, children }) => {
+// FIX: Added `className` prop to TabsContent to allow for custom styling and fix type error.
+export const TabsContent: React.FC<{ value: string; children: ReactNode; className?: string; }> = ({ value, children, className }) => {
   const { value: activeValue } = useContext(TabsContext);
-  return activeValue === value ? <div className="mt-4 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">{children}</div> : null;
+  return activeValue === value ? <div className={`mt-4 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${className || ''}`}>{children}</div> : null;
 };
 
 // --- Dropdown Menu ---

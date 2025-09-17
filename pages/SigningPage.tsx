@@ -4,6 +4,11 @@ import { AppContext } from '../context/AppContext';
 import { Document, DocumentField, FieldType, DocumentStatus } from '../types';
 import { Button, Modal, Spinner } from '../components/ui';
 import SignaturePad from '../components/SignaturePad';
+import * as pdfjsLib from 'pdfjs-dist/build/pdf.mjs';
+
+// Set worker source once at the module level.
+// This is the most robust way to ensure version consistency.
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://aistudiocdn.com/pdfjs-dist@4.3.136/build/pdf.worker.mjs';
 
 async function sha256(str: string): Promise<string> {
     const buffer = new TextEncoder().encode(str);
@@ -68,10 +73,10 @@ const SigningPage: React.FC = () => {
     setLoading(true);
     setPdfError(null);
     try {
-      const pdfJS = await import('pdfjs-dist/build/pdf.min.mjs');
-      pdfJS.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfJS.version}/build/pdf.worker.min.mjs`;
+      console.log('Using statically imported pdf.js library for signing page.');
 
-      const pdf = await pdfJS.getDocument(fileData).promise;
+      const pdf = await pdfjsLib.getDocument(fileData).promise;
+      console.log(`PDF for signing loaded with ${pdf.numPages} pages.`);
       const pages: string[] = [];
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
@@ -86,9 +91,10 @@ const SigningPage: React.FC = () => {
         }
       }
       setPdfPages(pages);
+      console.log('PDF rendering for signing page complete.');
     } catch (error) {
-      console.error("Failed to render PDF for signing:", error);
-      setPdfError("This document could not be displayed. It may be corrupted or an error occurred.");
+      console.error("Critical error while rendering PDF for signing:", error);
+      setPdfError("This document could not be displayed. It may be corrupted or an error occurred. Check the console for details.");
     } finally {
       setLoading(false);
     }

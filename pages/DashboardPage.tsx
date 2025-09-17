@@ -1,7 +1,7 @@
 import React, { useContext, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppContext } from '../context/AppContext';
-import { Button, Spinner, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, Modal, Card, CardContent } from '../components/ui';
+import { Button, Spinner, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, Modal, Card, CardContent, Tooltip } from '../components/ui';
 import { Document, DocumentStatus } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import ShareModal from '../components/ShareModal';
@@ -98,6 +98,19 @@ const DashboardPage: React.FC = () => {
       default: return { color: 'bg-slate-100 text-slate-800', text: 'Unknown' };
     }
   };
+  
+  const getInitials = (name: string) => name ? name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase() : '';
+
+  const getRecipientStatusInfo = (status: 'Pending' | 'Opened' | 'Signed' | 'Awaiting') => {
+      switch (status) {
+          case 'Signed':
+              return { color: 'bg-emerald-500', text: 'Signed' };
+          case 'Opened':
+              return { color: 'bg-blue-500', text: 'Opened' };
+          default:
+              return { color: 'bg-slate-400', text: 'Pending' };
+      }
+  };
 
   return (
     <div>
@@ -131,6 +144,8 @@ const DashboardPage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {documents.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((doc) => {
               const s = statusInfo(doc.status);
+              const signedCount = doc.recipients.filter(r => r.status === 'Signed').length;
+              const totalRecipients = doc.recipients.length;
               return (
               // FIX: Moved onClick to Card component to make the entire card clickable and resolve prop error on CardContent.
               <Card key={doc.id} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate(`/editor/${doc.id}`)}>
@@ -166,9 +181,40 @@ const DashboardPage: React.FC = () => {
                   </div>
                   <h3 className="text-lg font-bold text-slate-800 truncate mt-3" title={doc.name}>{doc.name}</h3>
                   <p className="text-sm text-slate-500 mt-2">Created: {new Date(doc.createdAt).toLocaleDateString()}</p>
-                  <div className="flex items-center text-sm text-slate-600 mt-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 mr-2 h-5 w-5 text-slate-400"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                    {doc.recipients.length} Recipient(s)
+                  
+                  <div className="mt-4 pt-4 border-t border-slate-100">
+                    <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-medium text-slate-600 flex items-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 mr-2 text-slate-400"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                          Recipients
+                        </span>
+                        {doc.status !== DocumentStatus.DRAFT && totalRecipients > 0 && (
+                          <span className="text-xs font-medium text-slate-500">{signedCount} of {totalRecipients} signed</span>
+                        )}
+                    </div>
+                    {totalRecipients > 0 ? (
+                        <div className="flex items-center -space-x-2 overflow-hidden">
+                            {doc.recipients.slice(0, 5).map((recipient) => {
+                                const recipientStatus = getRecipientStatusInfo(recipient.status);
+                                return (
+                                    <Tooltip key={recipient.id} content={`${recipient.name} - ${recipientStatus.text}`}>
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs ring-2 ring-white ${recipientStatus.color} flex-shrink-0`}>
+                                            {getInitials(recipient.name)}
+                                        </div>
+                                    </Tooltip>
+                                );
+                            })}
+                            {totalRecipients > 5 && (
+                                <Tooltip content={`${totalRecipients - 5} more recipients`}>
+                                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-slate-600 font-bold text-xs ring-2 ring-white bg-slate-200 flex-shrink-0">
+                                      +{totalRecipients - 5}
+                                  </div>
+                                </Tooltip>
+                            )}
+                        </div>
+                    ) : (
+                        <p className="text-sm text-slate-500">No recipients added.</p>
+                    )}
                   </div>
                 </CardContent>
               </Card>

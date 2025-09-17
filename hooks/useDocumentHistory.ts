@@ -3,11 +3,11 @@ import { Document } from '../types';
 
 interface History<T> {
   past: T[];
-  present: T;
+  present: T | undefined;
   future: T[];
 }
 
-export const useDocumentHistory = (initialDoc: Document) => {
+export const useDocumentHistory = (initialDoc: Document | undefined) => {
   const [state, setState] = useState<History<Document>>({
     past: [],
     present: initialDoc,
@@ -22,8 +22,9 @@ export const useDocumentHistory = (initialDoc: Document) => {
       if (JSON.stringify(newPresent) === JSON.stringify(currentState.present)) {
         return currentState;
       }
+      const newPast = currentState.present ? [...currentState.past, currentState.present] : currentState.past;
       return {
-        past: [...currentState.past, currentState.present],
+        past: newPast,
         present: newPresent,
         future: [],
       };
@@ -35,10 +36,11 @@ export const useDocumentHistory = (initialDoc: Document) => {
       if (!canUndo) return currentState;
       const newPresent = currentState.past[currentState.past.length - 1];
       const newPast = currentState.past.slice(0, currentState.past.length - 1);
+      const newFuture = currentState.present ? [currentState.present, ...currentState.future] : currentState.future;
       return {
         past: newPast,
         present: newPresent,
-        future: [currentState.present, ...currentState.future],
+        future: newFuture,
       };
     });
   }, [canUndo]);
@@ -48,8 +50,9 @@ export const useDocumentHistory = (initialDoc: Document) => {
       if (!canRedo) return currentState;
       const newPresent = currentState.future[0];
       const newFuture = currentState.future.slice(1);
+      const newPast = currentState.present ? [...currentState.past, currentState.present] : currentState.past;
       return {
-        past: [...currentState.past, currentState.present],
+        past: newPast,
         present: newPresent,
         future: newFuture,
       };

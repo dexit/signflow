@@ -22,7 +22,14 @@ const RECIPIENT_COLORS = [
   { border: 'border-indigo-500', bg: 'bg-indigo-100', text: 'text-indigo-800', dot: 'bg-indigo-500' },
 ];
 
-const getRecipientColor = (index: number) => RECIPIENT_COLORS[index % RECIPIENT_COLORS.length];
+// FIX: Made the color function resilient to invalid indices (e.g., -1 for a deleted recipient).
+// This prevents a common crash when rendering documents with inconsistent data.
+const getRecipientColor = (index: number) => {
+    if (index < 0) {
+        return { border: 'border-slate-500', bg: 'bg-slate-100', text: 'text-slate-800', dot: 'bg-slate-500' };
+    }
+    return RECIPIENT_COLORS[index % RECIPIENT_COLORS.length];
+};
 const getInitials = (name: string) => name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
 
 const FieldIcons: Record<FieldType, React.FC<{className?: string}>> = {
@@ -52,11 +59,30 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
     const navigate = useNavigate();
     const { getDocument, updateDocument, userProfile, logEvent } = useContext(AppContext);
     
-    const initialDoc = getDocument(documentId!);
-    const { doc, setDoc, undo, redo, canUndo, canRedo } = useDocumentHistory(initialDoc!);
+    // FIX: Immediately find the document. This prevents hooks from running with `undefined`.
+    const initialDoc = documentId ? getDocument(documentId) : undefined;
+
+    // FIX: Redirect if the document doesn't exist.
+    useEffect(() => {
+        if (!initialDoc) {
+            navigate('/dashboard');
+        }
+    }, [initialDoc, navigate]);
+    
+    // FIX: If the document is not found, render a loading state to prevent the rest of the component from executing.
+    if (!initialDoc) {
+      return (
+        <div className="flex h-screen w-screen bg-slate-50 justify-center items-center">
+            <Spinner size="lg" /><p className="ml-4 text-slate-600 text-lg">Loading Document...</p>
+        </div>
+      );
+    }
+
+    const { doc, setDoc, undo, redo, canUndo, canRedo } = useDocumentHistory(initialDoc);
     
     const [pdfPages, setPdfPages] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
+    const [pdfError, setPdfError] = useState<string | null>(null);
     const [selectedRecipientId, setSelectedRecipientId] = useState<string>('');
     const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
     const [isSendModalOpen, setSendModalOpen] = useState(false);
@@ -64,16 +90,12 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
     const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
 
     useEffect(() => {
-        if (!doc) {
-            navigate('/dashboard');
-            return;
-        }
         if(doc.recipients.length > 0 && !selectedRecipientId){
             setSelectedRecipientId(doc.recipients[0].id)
         } else if (doc.recipients.length === 0) {
             setSelectedRecipientId('');
         }
-    }, [doc, navigate, selectedRecipientId]);
+    }, [doc, selectedRecipientId]);
     
     // Deselect field if the recipient changes or field is removed
     useEffect(() => {
@@ -93,34 +115,40 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
 
     const renderPdf = useCallback(async (fileData: string) => {
       setLoading(true);
-      const pdfJS = await import('pdfjs-dist/build/pdf.min.mjs');
-      pdfJS.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfJS.version}/build/pdf.worker.min.mjs`;
+      setPdfError(null);
+      try {
+        const pdfJS = await import('pdfjs-dist/build/pdf.min.mjs');
+        pdfJS.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfJS.version}/build/pdf.worker.min.mjs`;
 
-      const pdf = await pdfJS.getDocument(fileData).promise;
-      const pages: string[] = [];
-      const pageDimensions: { width: number, height: number }[] = [];
-      pageRefs.current = [...Array(pdf.numPages)];
+        const pdf = await pdfJS.getDocument(fileData).promise;
+        const pages: string[] = [];
+        const pageDimensions: { width: number, height: number }[] = [];
+        pageRefs.current = [...Array(pdf.numPages)];
 
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale: 2.0 }); // Higher scale for better quality
-        pageDimensions.push({ width: viewport.width, height: viewport.height });
-        const canvas = document.createElement('canvas');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const context = canvas.getContext('2d');
-        if (context) {
-          await page.render({ canvasContext: context, viewport: viewport }).promise;
-          pages.push(canvas.toDataURL('image/png'));
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale: 2.0 }); // Higher scale for better quality
+          pageDimensions.push({ width: viewport.width, height: viewport.height });
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const context = canvas.getContext('2d');
+          if (context) {
+            await page.render({ canvasContext: context, viewport: viewport }).promise;
+            pages.push(canvas.toDataURL('image/png'));
+          }
         }
+        setPdfPages(pages);
+        
+        if(doc && !doc.pageDimensions) {
+            setDoc({ ...doc, pageDimensions });
+        }
+      } catch (error) {
+          console.error("Failed to render PDF:", error);
+          setPdfError("This PDF could not be loaded. It may be corrupted or in an unsupported format.");
+      } finally {
+        setLoading(false);
       }
-      setPdfPages(pages);
-      
-      if(doc && !doc.pageDimensions) {
-          setDoc({ ...doc, pageDimensions });
-      }
-      
-      setLoading(false);
     }, [doc, setDoc]);
 
     useEffect(() => {
@@ -187,12 +215,23 @@ const EditorPage: React.FC<EditorPageProps> = ({ isReadOnly = false, documentIdF
         navigate(`/sign/${doc.id}/${selfRecipient.id}`);
     };
     
-    if (loading || !doc) {
+    if (loading) {
       return (
         <div className="flex h-screen w-screen bg-slate-50 justify-center items-center">
             <Spinner size="lg" /><p className="ml-4 text-slate-600 text-lg">Preparing Document...</p>
         </div>
       );
+    }
+
+    if (pdfError) {
+        return (
+            <div className="flex flex-col h-screen w-screen bg-slate-50 justify-center items-center text-center p-4">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500 mb-4"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+                <h2 className="text-2xl font-bold text-slate-800">Error Loading Document</h2>
+                <p className="text-red-600 mt-2">{pdfError}</p>
+                <Button onClick={() => navigate('/dashboard')} className="mt-6">Back to Dashboard</Button>
+            </div>
+        );
     }
     
     const handleFieldDrop = (item: { type: FieldType }, page: number, dropX: number, dropY: number) => {

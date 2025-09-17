@@ -21,6 +21,7 @@ const SigningPage: React.FC = () => {
   const [doc, setDoc] = useState<Document | null>(null);
   const [pdfPages, setPdfPages] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pdfError, setPdfError] = useState<string | null>(null);
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [isSignatureModalOpen, setSignatureModalOpen] = useState(false);
   const [activeSignatureField, setActiveSignatureField] = useState<DocumentField | null>(null);
@@ -65,25 +66,32 @@ const SigningPage: React.FC = () => {
 
   const renderPdf = useCallback(async (fileData: string) => {
     setLoading(true);
-    const pdfJS = await import('pdfjs-dist/build/pdf.min.mjs');
-    pdfJS.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfJS.version}/build/pdf.worker.min.mjs`;
+    setPdfError(null);
+    try {
+      const pdfJS = await import('pdfjs-dist/build/pdf.min.mjs');
+      pdfJS.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfJS.version}/build/pdf.worker.min.mjs`;
 
-    const pdf = await pdfJS.getDocument(fileData).promise;
-    const pages: string[] = [];
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const viewport = page.getViewport({ scale: 1.5 });
-      const canvas = document.createElement('canvas');
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      const context = canvas.getContext('2d');
-      if (context) {
-        await page.render({ canvasContext: context, viewport: viewport }).promise;
-        pages.push(canvas.toDataURL('image/png'));
+      const pdf = await pdfJS.getDocument(fileData).promise;
+      const pages: string[] = [];
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 1.5 });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const context = canvas.getContext('2d');
+        if (context) {
+          await page.render({ canvasContext: context, viewport: viewport }).promise;
+          pages.push(canvas.toDataURL('image/png'));
+        }
       }
+      setPdfPages(pages);
+    } catch (error) {
+      console.error("Failed to render PDF for signing:", error);
+      setPdfError("This document could not be displayed. It may be corrupted or an error occurred.");
+    } finally {
+      setLoading(false);
     }
-    setPdfPages(pages);
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -172,8 +180,22 @@ const SigningPage: React.FC = () => {
     });
   };
 
-  if (loading || !doc) {
+  if (loading) {
     return <div className="flex justify-center items-center h-screen"><Spinner size="lg" /><p className="ml-4 text-slate-600">Loading Document...</p></div>;
+  }
+  
+  if (pdfError) {
+    return (
+        <div className="flex flex-col h-screen w-screen bg-slate-50 justify-center items-center text-center p-4">
+            <h2 className="text-2xl font-bold text-slate-800">Error Loading Document</h2>
+            <p className="text-red-600 mt-2">{pdfError}</p>
+            <Button onClick={() => navigate('/dashboard')} className="mt-6">Back to Dashboard</Button>
+        </div>
+    );
+  }
+
+  if (!doc) {
+    return <div className="flex justify-center items-center h-screen"><p className="text-slate-600">Document not found.</p></div>;
   }
   
   const recipient = doc.recipients.find(r => r.id === recipientId);

@@ -102,11 +102,42 @@ const getInitialState = <T,>(key: string, defaultValue: T): T => {
       // If default is an array, stored must be an array.
       if (Array.isArray(defaultValue)) {
         if (Array.isArray(parsed)) {
-          // FIX: Sanitize the array. Filter out any non-object/null values to prevent crashes from corrupted data within the array.
+          // Step 1: Filter out completely invalid entries like null or primitives.
           const sanitizedArray = parsed.filter(item => item && typeof item === 'object' && !Array.isArray(item));
           if (sanitizedArray.length < parsed.length) {
             console.warn(`Data for key "${key}" in localStorage contained corrupted entries which have been removed.`);
           }
+
+          // Step 2: For documents, perform a deep normalization and sanitization step.
+          // This prevents crashes when rendering older documents that are missing keys OR have corrupted nested data.
+          if (key === 'documents') {
+            const normalizedDocs = sanitizedArray.map(doc => {
+              // Ensure top-level arrays exist
+              const recipients = Array.isArray(doc.recipients) ? doc.recipients : [];
+              const fields = Array.isArray(doc.fields) ? doc.fields : [];
+              const events = Array.isArray(doc.events) ? doc.events : [];
+
+              // Sanitize nested arrays to remove null/invalid entries
+              const sanitizedRecipients = recipients.filter(item => item && typeof item === 'object');
+              const sanitizedFields = fields.filter(item => item && typeof item === 'object');
+              const sanitizedEvents = events.filter(item => item && typeof item === 'object');
+
+              if (sanitizedRecipients.length < recipients.length || 
+                  sanitizedFields.length < fields.length || 
+                  sanitizedEvents.length < events.length) {
+                console.warn(`Sanitized corrupted nested data within document ID "${doc.id}".`);
+              }
+              
+              return {
+                ...doc,
+                recipients: sanitizedRecipients,
+                fields: sanitizedFields,
+                events: sanitizedEvents,
+              };
+            });
+            return normalizedDocs as T;
+          }
+          
           return sanitizedArray as T;
         }
         console.warn(`Data for key "${key}" in localStorage was corrupted (expected array). Falling back to default.`);
@@ -186,7 +217,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                     message,
                     timestamp: new Date().toISOString()
                 };
-                return { ...doc, events: [...doc.events, newEvent] };
+                // Ensure events array exists before pushing
+                const existingEvents = Array.isArray(doc.events) ? doc.events : [];
+                return { ...doc, events: [...existingEvents, newEvent] };
             }
             return doc;
         });
